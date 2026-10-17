@@ -263,7 +263,9 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     let externalChunks = externalChanged ? splitExternalMemoryIntoChunks(external.records) : [];
     let totalChunks = chunks.length + externalChunks.length;
     let batchBudgets = [], capacityPending = [];
-    let pausedProgress = pinnedInputs?.pausedProgress || (restartImport && storedProgress ? [...(existing?.archiveImportPaused || []), storedProgress] : existing?.archiveImportPaused || []);
+    // Parked old progress is a record only: no chat copy, newest few kept.
+    let pausedProgress = draft_inputs.compactPausedProgressList(pinnedInputs?.pausedProgress
+        || (restartImport && storedProgress ? [...(existing?.archiveImportPaused || []), storedProgress] : existing?.archiveImportPaused || []));
     let completedChunks = 0;
     let chunkInFlight = false;
     core_taskTrace.markChunks(taskTrace, { total: totalChunks, pending: totalChunks });
@@ -360,20 +362,27 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
                 external, contextEnvelope, inputOwner, identity, userAvatar,
                 participantRoster: archiveRoster });
         }
-        if (progress && taskInputV1) progress.taskInputV1 = structuredClone(taskInputV1);
+        if (progress && taskInputV1) {
+            progress.taskInputV1 = structuredClone(taskInputV1);
+            // An exact copy of an already verified input: no second full hash.
+            if (draft_inputs.taskInputDigestValid(taskInputV1)) draft_inputs.markVerifiedTaskInput(progress.taskInputV1);
+        }
         const livePreparation = assertPreparationCurrent();
         if (progress) assertBatchCommitIdentity(context, { [archive_batches.IMPORT_PROGRESS_KEY]: progress });
         // r84.159：保存前（assertBatchSaveCurrent）会做同一项核对。提前到发请求之前，不先花钱再拒绝保存。
         if ((commitCompletedOnly || receiptBase?.archivePartialDraft) && !floorWindowSync
             && core_context.completeArchiveChatFingerprint(livePreparation) !== snapshotForIdentity.fullFingerprint) throw archive_batches.changedInput('chat');
         if (!automatic && !continueRecovery) {
-            const chatCharacters = chatInput.reduce((sum, item) => sum + item.text.length, 0);
+            // With batches, count only what this batch sends, not the whole chat.
+            const batchRows = progress && !legacyDraft ? chunks.flat() : chatInput;
+            const chatCount = progress && !legacyDraft ? new Set(batchRows.map(item => item.index)).size : chatInput.length;
+            const chatCharacters = batchRows.reduce((sum, item) => sum + item.text.length, 0);
             const externalCharacters = externalChunks.reduce((sum, chunk) => sum + JSON.stringify(chunk).length, 0);
             const rangeLabel = snapshot.readRange?.mode === 'all' ? '全部楼层'
                 : snapshot.readRange?.mode === 'recent' ? `最近 ${snapshot.readRange.recent} 楼`
                     : `第 ${snapshot.readRange?.start}–${snapshot.readRange?.end} 楼`;
             if (!ui_overlay.confirmExplicitAction('确认本次读取范围',
-                `${progress ? `本次为第 ${progress.nextBatch + 1}/${progress.batches.length} 批，完成后停止。` : ''}【${archive_coverage.OPERATION_KIND_LABEL[operationKind]}】${rangeLabel}；已捕获 ${chatInput.length} 条聊天正文，约 ${chatCharacters.toLocaleString()} 字符。${snapshot.readRange?.includeHidden ? '包含隐藏普通对话' : '不含隐藏对话'}。\n外部摘要独立选择：${externalChunks.length} 个分块，约 ${externalCharacters.toLocaleString()} 字符；角色/用户设定与世界书背景每次请求约 ${contextEnvelope.length.toLocaleString()} 字符。\n分块整理后还有档案概述步骤；字符数不是精确 token 或费用。已有 ${existing?.memories?.length || 0} 条档案记忆保留，不会因缩小范围而删除。`,
+                `${progress ? `本次为第 ${progress.nextBatch + 1}/${progress.batches.length} 批，完成后停止。` : ''}【${archive_coverage.OPERATION_KIND_LABEL[operationKind]}】${rangeLabel}；${progress ? '本批' : '已捕获'} ${chatCount} 条聊天正文，约 ${chatCharacters.toLocaleString()} 字符。${snapshot.readRange?.includeHidden ? '包含隐藏普通对话' : '不含隐藏对话'}。\n外部摘要独立选择：${externalChunks.length} 个分块，约 ${externalCharacters.toLocaleString()} 字符；角色/用户设定与世界书背景每次请求约 ${contextEnvelope.length.toLocaleString()} 字符。\n分块整理后还有档案概述步骤；字符数不是精确 token 或费用。已有 ${existing?.memories?.length || 0} 条档案记忆保留，不会因缩小范围而删除。`,
                 { destructive: false })) return { status: 'cancelled' };
             assertPreparationCurrent();
         }

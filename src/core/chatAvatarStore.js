@@ -4,6 +4,8 @@ const CHAT_AVATAR_SERVICE = Symbol.for('Hearttrace.chatAvatars.v1');
 const CHAT_AVATAR_DB = 'hearttrace-chat-avatars-v1';
 const CHAT_AVATAR_STORE = 'pairs';
 const CHAT_AVATAR_PREFIX = 'hearttrace:chat-avatars:v1:';
+// Cross-tab "something changed" signal only; never carries avatar data.
+const CHAT_AVATAR_CHANNEL = 'hearttrace-chat-avatars-v1';
 
 function service() {
     if (!globalThis[CHAT_AVATAR_SERVICE]) {
@@ -11,8 +13,14 @@ function service() {
             subscribers: new Set(), db: null, api: null, installations: 0, activeScope: '', scopeQueued: false };
     }
     // Shared with any already loaded lightweight/bundled copy, never a third durable store.
-    if (!globalThis[CHAT_AVATAR_SERVICE].fallbackRepairs) globalThis[CHAT_AVATAR_SERVICE].fallbackRepairs = new Map();
-    return globalThis[CHAT_AVATAR_SERVICE];
+    const state = globalThis[CHAT_AVATAR_SERVICE];
+    if (!state.fallbackRepairs) state.fallbackRepairs = new Map();
+    // Scopes whose cached record was read from durable storage (or written by this tab) since the
+    // last cross-tab change signal. Refreshes serve these from memory instead of re-reading and
+    // re-validating multi-MB PNG data URLs on every host event.
+    if (!state.verified) state.verified = new Set();
+    if (!Number.isSafeInteger(state.epoch)) state.epoch = 0;
+    return state;
 }
 
 function rawContext() {
@@ -121,12 +129,51 @@ function observeCurrentScope() {
     queueMicrotask(() => { state.scopeQueued = false; notifyChanged(); });
 }
 
+function samePerson(a, b) { return a === b || (!!a && !!b && a.name === b.name && a.url === b.url); }
+
+function sameRecord(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    return a.revision === b.revision && !!a.deleted === !!b.deleted && a.scope === b.scope
+        && samePerson(a.char, b.char) && samePerson(a.user, b.user);
+}
+
 function cacheRecord(scope, record) {
     const state = service(), previous = state.cache.get(scope);
     const chosen = newestRecord(previous, record);
     state.cache.set(scope, chosen);
-    if (previous === undefined || JSON.stringify(previous) !== JSON.stringify(chosen)) notifyChanged();
+    if (previous === undefined || !sameRecord(previous, chosen)) notifyChanged();
     return chosen;
+}
+
+function invalidateVerified() {
+    const state = service();
+    state.epoch += 1;
+    state.verified.clear();
+    // Re-read the visible scope now so another tab's change shows up without waiting for a host event.
+    if (state.activeScope && state.cache.has(state.activeScope)) hydrate(state.activeScope).catch(() => {});
+}
+
+function announceWrite(scope) {
+    try { service().channel?.postMessage?.({ scope }); } catch { /* Other tabs re-read on their next hydrate. */ }
+}
+
+function watchOtherTabs() {
+    const state = service();
+    if (state.crossTabWatch) return;
+    state.crossTabWatch = true;
+    try {
+        if (typeof globalThis.BroadcastChannel === 'function') {
+            state.channel = new globalThis.BroadcastChannel(CHAT_AVATAR_CHANNEL);
+            state.channel.onmessage = () => invalidateVerified();
+        }
+    } catch { state.channel = null; }
+    // Older tabs still mirror every pair into localStorage; their writes arrive as storage events.
+    try {
+        globalThis.addEventListener?.('storage', event => {
+            if (event?.key == null || String(event.key).startsWith(CHAT_AVATAR_PREFIX)) invalidateVerified();
+        });
+    } catch { /* No cross-tab signal; this tab's own writes still update the cache. */ }
 }
 
 function openDatabase() {
@@ -155,6 +202,18 @@ function openDatabase() {
     return pending;
 }
 
+async function putDatabase(record) {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+        try {
+            const tx = db.transaction(CHAT_AVATAR_STORE, 'readwrite');
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = tx.onabort = () => reject(new Error('Avatar write failed'));
+            tx.objectStore(CHAT_AVATAR_STORE).put(record);
+        } catch (error) { reject(error); }
+    });
+}
+
 async function readDatabase(scope) {
     const db = await openDatabase();
     return new Promise((resolve, reject) => {
@@ -180,6 +239,42 @@ function writeFallback(record) {
         const storage = globalThis.localStorage;
         if (!storage?.setItem) return false;
         storage.setItem(CHAT_AVATAR_PREFIX + record.scope, JSON.stringify(record));
+        return true;
+    } catch { return false; }
+}
+
+// Revision of the localStorage mirror without re-validating its PNGs. null = no mirror,
+// 0 = unreadable/corrupt mirror. Throws when localStorage itself cannot be read.
+function fallbackRevision(scope) {
+    const storage = globalThis.localStorage;
+    if (!storage?.getItem) throw new Error('Avatar storage unavailable');
+    const raw = storage.getItem(CHAT_AVATAR_PREFIX + scope);
+    if (!raw) return null;
+    try {
+        const value = JSON.parse(raw);
+        return Number.isSafeInteger(value?.revision) && value.revision > 0 ? value.revision : 0;
+    } catch { return 0; }
+}
+
+// IndexedDB holds `record` (the newest durable copy). Any localStorage mirror that is not newer is
+// redundant: remove it so multi-MB data URLs do not sit in localStorage. A newer mirror (written by
+// a tab whose IndexedDB write failed) is kept for migration. Read + remove run synchronously, so a
+// concurrent fallback write in this tab cannot be lost between them.
+function dropRedundantFallback(record) {
+    try {
+        const revision = fallbackRevision(record.scope);
+        if (revision === null || revision > record.revision) return true;
+    } catch {
+        // localStorage is missing or cannot be read: no mirror can be read back to shadow
+        // IndexedDB, so the stores are consistent. Only a stale mirror this tab already saw
+        // (a pending repair) still needs a verified removal.
+        const known = service().fallbackRepairs.has(record.scope);
+        try { globalThis.localStorage?.removeItem?.(CHAT_AVATAR_PREFIX + record.scope); return true; } catch { return !known; }
+    }
+    try {
+        const storage = globalThis.localStorage;
+        if (!storage?.removeItem) return false;
+        storage.removeItem(CHAT_AVATAR_PREFIX + record.scope);
         return true;
     } catch { return false; }
 }
@@ -225,27 +320,56 @@ function reconcileFallback(record) {
 
 function incompleteSaveError() { return new Error('头像更改未能完整保存，请检查本地存储后重试。'); }
 
+// Bring both stores in line once IndexedDB is readable. localStorage is only a fallback for failed
+// IndexedDB writes: a newer fallback copy is migrated into IndexedDB and then removed; an older,
+// equal, tombstoned or corrupt one is removed. Returns whether no known stale fallback remains.
+async function settleStores(scope, local, database) {
+    const pending = service().fallbackRepairs.get(scope);
+    const durable = newestRecord(database, pending);
+    if (local && (!durable || local.revision > durable.revision)) {
+        let migrated = false;
+        try { migrated = await putDatabase(local); } catch { migrated = false; }
+        // Not migrated: the fallback is still the only copy of the newest pair and must stay.
+        return trackFallbackResult(local, migrated ? dropRedundantFallback(local) : true);
+    }
+    if (!durable) return true;
+    return trackFallbackResult(durable, dropRedundantFallback(durable));
+}
+
 async function hydrate(scope) {
     const state = service();
     if (state.loads.has(scope)) return state.loads.get(scope);
+    const epoch = state.epoch;
     const pending = (async () => {
-        let local = null, database = null, available = false;
-        try { local = readFallback(scope); available = true; } catch { /* Try the independent database. */ }
-        try { database = await readDatabase(scope); available = true; } catch { /* Existing cache stays usable. */ }
-        if (!available) {
+        let local = null, database = null, localReadable = false, databaseReadable = false;
+        try { local = readFallback(scope); localReadable = true; } catch { /* Try the independent database. */ }
+        try { database = await readDatabase(scope); databaseReadable = true; } catch { /* Existing cache stays usable. */ }
+        if (!localReadable && !databaseReadable) {
             if (state.fallbackRepairs.has(scope)) throw incompleteSaveError();
             return state.cache.get(scope) || null;
         }
         // A later refresh retries an incomplete fallback sync, including after restore
         // when the UI already sees the committed tombstone and has no pair to clear.
-        const fallbackConsistent = reconcileFallback(database || state.fallbackRepairs.get(scope));
+        const fallbackConsistent = databaseReadable
+            ? await settleStores(scope, local, database)
+            : reconcileFallback(state.fallbackRepairs.get(scope));
         const record = cacheRecord(scope, newestRecord(local, database));
         if (!fallbackConsistent) throw incompleteSaveError();
+        if (state.epoch === epoch) state.verified.add(scope);
         return record;
     })();
     state.loads.set(scope, pending);
     pending.finally(() => { if (state.loads.get(scope) === pending) state.loads.delete(scope); }).catch(() => {});
     return pending;
+}
+
+// The in-memory record is served as long as nothing has signalled a change since it was read.
+function currentRecord(scope) {
+    const state = service();
+    if (state.cache.has(scope) && state.verified.has(scope) && !state.fallbackRepairs.has(scope)) {
+        return Promise.resolve(state.cache.get(scope));
+    }
+    return hydrate(scope);
 }
 
 export function readChatAvatarSnapshot(context = rawContext()) {
@@ -260,7 +384,7 @@ export async function loadChatAvatarSnapshot(context = rawContext()) {
     observeCurrentScope();
     const scope = chatAvatarScope(context);
     if (!scope || !currentScopeMatches(context, scope)) return null;
-    const record = await hydrate(scope);
+    const record = await currentRecord(scope);
     observeCurrentScope();
     return currentScopeMatches(context, scope) ? visibleRecord(record) : null;
 }
@@ -281,14 +405,21 @@ async function writeDatabase(record, context) {
 
 async function commitRecord(record, context) {
     assertCurrentScope(context, record.scope);
-    let databaseSaved = false, fallbackSaved = false;
+    let databaseSaved = false;
     try { databaseSaved = await writeDatabase(record, context); } catch { /* Same atomic pair may use local storage. */ }
     assertCurrentScope(context, record.scope);
-    fallbackSaved = writeFallback(record);
-    if (!databaseSaved && !fallbackSaved) throw new Error('头像保存失败，原头像已保留。请检查本地存储空间后再试。');
-    const fallbackConsistent = trackFallbackResult(record, fallbackSaved || discardStaleFallback(record));
+    let fallbackConsistent;
+    if (databaseSaved) {
+        // IndexedDB owns the pair; do not copy multi-MB data URLs into localStorage as well.
+        fallbackConsistent = trackFallbackResult(record, dropRedundantFallback(record));
+    } else {
+        if (!writeFallback(record)) throw new Error('头像保存失败，原头像已保留。请检查本地存储空间后再试。');
+        fallbackConsistent = trackFallbackResult(record, true);
+    }
     // Do not roll back a durable primary write or pretend the old pair is still current.
     cacheRecord(record.scope, record);
+    service().verified.add(record.scope);
+    announceWrite(record.scope);
     if (!fallbackConsistent) {
         // With an inaccessible stale fallback, a later database outage cannot be
         // distinguished from an older successful save after restart. Report partial
@@ -305,7 +436,7 @@ function queuedWrite(context, expectedScope, pair) {
     const state = service(), previous = state.writes.get(scope) || Promise.resolve();
     const pending = previous.catch(() => {}).then(async () => {
         assertCurrentScope(context, scope);
-        const old = await hydrate(scope);
+        const old = await currentRecord(scope);
         assertCurrentScope(context, scope);
         const revision = Math.max(Date.now(), Number(old?.revision || 0) + 1);
         const record = Object.freeze(pair ? { version: 1, scope, revision, char: pair.char, user: pair.user }
@@ -327,8 +458,46 @@ export async function clearChatAvatarPair({ context = rawContext(), expectedScop
     return queuedWrite(context, expectedScope, null);
 }
 
+// One pass over localStorage mirrors left by older versions (every pair used to be mirrored there):
+// migrate anything newer than IndexedDB, then remove the mirror. Stops untouched when IndexedDB is
+// unavailable, because then the mirror may be the only copy.
+export async function pruneChatAvatarFallbacks() {
+    const state = service();
+    if (state.pruning) return state.pruning;
+    state.pruning = (async () => {
+        const storage = globalThis.localStorage;
+        let keys = [];
+        try {
+            if (!storage || typeof storage.key !== 'function') return 0;
+            for (let index = 0; index < storage.length; index += 1) {
+                const key = storage.key(index);
+                if (typeof key === 'string' && key.startsWith(CHAT_AVATAR_PREFIX)) keys.push(key);
+            }
+        } catch { return 0; }
+        let removed = 0;
+        for (const key of keys) {
+            const scope = key.slice(CHAT_AVATAR_PREFIX.length);
+            if (!scope || state.writes.has(scope) || state.loads.has(scope)) continue;
+            let local = null, database = null;
+            try { local = readFallback(scope); } catch { return removed; }
+            try { database = await readDatabase(scope); } catch { return removed; }
+            if (state.writes.has(scope)) continue;
+            const before = fallbackRevision(scope) !== null;
+            await settleStores(scope, local, database);
+            if (before && fallbackRevision(scope) === null) removed += 1;
+        }
+        return removed;
+    })().catch(() => 0).finally(() => { state.pruning = null; });
+    return state.pruning;
+}
+
 export function installChatAvatarBridge() {
     const state = service();
+    watchOtherTabs();
+    if (!state.pruneScheduled && typeof globalThis.setTimeout === 'function') {
+        state.pruneScheduled = true;
+        globalThis.setTimeout(() => { void pruneChatAvatarFallbacks(); }, 4000);
+    }
     if (!state.api) state.api = Object.freeze({ apiVersion: 1,
         getCurrent() { return readChatAvatarSnapshot(); },
         refresh() { return loadChatAvatarSnapshot(); },

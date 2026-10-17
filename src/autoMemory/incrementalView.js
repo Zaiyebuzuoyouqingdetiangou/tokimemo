@@ -155,7 +155,9 @@ function fallbackList(key, original, added) {
 export function incrementalProjection(session, { sourceMemoryIds = [], createdAt = 0, since = 0 } = {}) {
     if (!session || typeof session !== 'object') return { kept: false, session: null };
     const ids = new Set(Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []);
-    const copy = structuredClone(session);
+    // 投影只读：每个列表都换成新数组（条目本来就引用原会话），其余字段浅拷贝即可，
+    // 不必为每封信深拷贝整个模块会话。调用方不得改写返回的 session。
+    const copy = { ...session };
     const last = lastUpdateOf(session);
     const sinceAt = Number(since) || 0;
     const predates = !!(last && sinceAt > 0 && last.updatedAt > 0 && last.updatedAt < sinceAt);

@@ -354,6 +354,103 @@ export function parseInboxRecoveryObject(raw) {
         has: pointer => pointer === '' || pointer === '/letters' ? false : readable.has(pointer) };
 }
 
+// One conservative repair pass for a reply that is JSON apart from common
+// slips: trailing commas before } or ], raw control characters/newlines inside
+// strings, Chinese curly quotes used as string delimiters, and // or /* */
+// comments outside strings. Text inside an ASCII-quoted string is copied as is,
+// except that raw control characters are escaped. Nothing is invented: no
+// missing quote, bracket or value is added. Returns '' when nothing changed.
+export function repairJsonCandidate(text) {
+    if (typeof text !== 'string' || !text) return '';
+    const CURLY_OPEN = '“', CURLY_CLOSE = '”';
+    const controlEscape = char => char === '\n' ? '\\n' : char === '\r' ? '\\r' : char === '\t' ? '\\t'
+        : `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`;
+    const structuralAfter = index => {
+        let cursor = index;
+        while (cursor < text.length && /\s/.test(text[cursor])) cursor += 1;
+        return cursor >= text.length || ':,}]'.includes(text[cursor]);
+    };
+    let out = '';
+    let quote = ''; // '' outside strings, '"' in an ASCII string, '”' in a curly one
+    let escaped = false;
+    for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+        if (quote) {
+            if (escaped) { escaped = false; out += char; continue; }
+            if (char === '\\') { escaped = true; out += char; continue; }
+            if (quote === '"' && char === '"') { quote = ''; out += char; continue; }
+            if (quote === CURLY_CLOSE && (char === CURLY_CLOSE || char === CURLY_OPEN) && structuralAfter(i + 1)) {
+                quote = ''; out += '"'; continue;
+            }
+            if (quote === CURLY_CLOSE && char === '"') { out += '\\"'; continue; }
+            out += char.charCodeAt(0) < 0x20 ? controlEscape(char) : char;
+            continue;
+        }
+        if (char === '"') { quote = '"'; out += char; continue; }
+        if (char === CURLY_OPEN || char === CURLY_CLOSE) { quote = CURLY_CLOSE; out += '"'; continue; }
+        if (char === '/' && text[i + 1] === '/') {
+            while (i < text.length && text[i] !== '\n') i += 1;
+            out += '\n';
+            continue;
+        }
+        if (char === '/' && text[i + 1] === '*') {
+            const end = text.indexOf('*/', i + 2);
+            if (end < 0) return '';
+            i = end + 1;
+            out += ' ';
+            continue;
+        }
+        if (char === '}' || char === ']') {
+            let tail = out.length - 1;
+            while (tail >= 0 && /\s/.test(out[tail])) tail -= 1;
+            if (out[tail] === ',') out = out.slice(0, tail) + out.slice(tail + 1);
+        }
+        out += char;
+    }
+    return out !== text ? out : '';
+}
+
+function parseRepairedObject(text) {
+    const repaired = repairJsonCandidate(text);
+    if (!repaired) return null;
+    try {
+        const parsed = JSON.parse(repaired);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch { return null; }
+}
+
+// A reply whose final } balances its first { when string state is ignored has
+// most likely ended; an unescaped quote inside a string only makes the
+// string-aware scan look unclosed. Real cut-offs still have unclosed brackets.
+// A string the scan is still inside at the end only counts as such a stray
+// quote when it did not open where a JSON string may start (after { [ , :).
+// A properly opened string that never closed, e.g. {"a":"x","b":"y}, is a cut-off.
+function unclosedObjectLooksEnded(unclosed, finishReason = '') {
+    if (['length', 'max_tokens', 'incomplete'].includes(String(finishReason || '').toLowerCase())) return false;
+    const body = String(unclosed || '').trim();
+    if (!body.startsWith('{') || !body.endsWith('}')) return false;
+    let inString = false, escaped = false, openedAtValue = false, previous = '';
+    for (const char of body) {
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (char === '\\') escaped = true;
+            else if (char === '"') { inString = false; previous = char; }
+            continue;
+        }
+        if (char === '"') { inString = true; openedAtValue = '{[,:'.includes(previous); continue; }
+        if (!/\s/.test(char)) previous = char;
+    }
+    if (inString && openedAtValue) return false;
+    let braces = 0, brackets = 0;
+    for (const char of body) {
+        if (char === '{') braces += 1;
+        else if (char === '}') braces -= 1;
+        else if (char === '[') brackets += 1;
+        else if (char === ']') brackets -= 1;
+    }
+    return braces === 0 && brackets === 0;
+}
+
 export function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
     const requestMax = Math.max(0, Math.floor(Number(requestMaxTokens) || 0));
     const configuredMax = output_budget.normalizeOutputTokens(configuredMaxTokens);
@@ -364,7 +461,7 @@ export function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTok
     return `${segmentNote}；当前插件设置 ${configuredMax.toLocaleString()} tokens；实际可用额度由所选模型／渠道决定。`;
 }
 
-export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0, mode = '', mergedInboxIllustrations = false } = {}) {
+export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0, mode = '', mergedInboxIllustrations = false, finishReason = '' } = {}) {
     if (raw != null && typeof raw !== 'string') {
         const error = jsonOutputError('RMT_RESPONSE_FORMAT', '连接返回的正文结构暂不支持，未取得可解析的最终正文；旧内容未改变。');
         error.retryable = false;
@@ -393,6 +490,8 @@ export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configu
         const candidate = inboxResponseCandidate(text, null, 'modules');
         if (candidate) {
             try { const parsed = JSON.parse(candidate); if (parsed && typeof parsed === 'object') return parsed; } catch {}
+            const repaired = parseRepairedObject(candidate);
+            if (repaired) return repaired;
             const salvaged = salvageMergedInboxIllustrations(candidate);
             if (salvaged) return salvaged;
             // Never promote an earlier example when the actual merged reply
@@ -404,6 +503,8 @@ export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configu
     const inboxCandidate = mode === 'inbox' ? inboxResponseCandidate(text, inboxSelection) : '';
     if (inboxCandidate) {
         try { const parsed = JSON.parse(inboxCandidate); if (parsed && typeof parsed === 'object') return parsed; } catch {}
+        const repaired = parseRepairedObject(inboxCandidate);
+        if (repaired) return repaired;
         const salvaged = salvageInboxLetters(inboxCandidate);
         if (salvaged) return salvaged;
         // Do not fall back to an earlier example when the answer has started.
@@ -417,16 +518,24 @@ export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configu
         } catch {}
     }
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const { candidates, hasUnclosedObject } = extractBalancedJsonObjects(text);
+    const { candidates, hasUnclosedObject, unclosedObject } = extractBalancedJsonObjects(text);
     for (let i = candidates.length - 1; i >= 0; i -= 1) {
         try {
             const parsed = JSON.parse(candidates[i]);
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
         } catch {}
     }
+    // Nothing parsed as it stands: one conservative repair pass on the selected
+    // candidate (the final, possibly unclosed, object), then parse again.
+    const selected = hasUnclosedObject ? unclosedObject : candidates[candidates.length - 1] || '';
+    const repaired = selected ? parseRepairedObject(selected) : null;
+    if (repaired) return repaired;
     const salvaged = salvageInboxLetters(text);
     if (salvaged) return salvaged;
-    if (hasUnclosedObject) {
+    // A reply that visibly ended with its closing } is malformed, not cut off:
+    // report it as invalid so no continuation request is sent for it.
+    const endedMalformed = hasUnclosedObject && unclosedObjectLooksEnded(unclosedObject, finishReason);
+    if (hasUnclosedObject && !endedMalformed) {
         const error = jsonOutputError(
             'RMT_JSON_TRUNCATED',
             `模型返回的 JSON 疑似被截断：已经出现“{”，但没有完整闭合。${budgetSummary} 如果本段实际上限低于当前插件设置，继续提高全局“最大输出”不会突破该功能自己的分段上限；可只重试这一项，或换用输出更稳定的模型。`,
@@ -437,7 +546,7 @@ export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configu
         if (inboxSelection.suppressedEarlierParsed) error.preserveInboxWithoutAutoContinue = true;
         throw error;
     }
-    if (!candidates.length) {
+    if (!candidates.length && !endedMalformed) {
         throw jsonOutputError(
             'RMT_JSON_NOT_FOUND',
             `模型返回了最终正文（约 ${text.length.toLocaleString()} 字符），但其中没有完整 JSON 对象。插件没有保存或覆盖任何旧数据；可只重试这一项。`,

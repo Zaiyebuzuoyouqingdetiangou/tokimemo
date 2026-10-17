@@ -318,7 +318,7 @@ function renderJobs(view) {
     const rows = [...jobs.values()].filter(job => job.scope === view.scope);
     target.innerHTML = rows.map(job => job.status === 'failed'
         ? `<div class="rmt-pair-job is-failed" role="alert"><span><strong>这一对没有完成</strong><small>${esc(job.message)}</small></span>${button('dismiss-job', '知道了', `data-pair-id="${job.id}"`)}</div>`
-        : `<div class="rmt-pair-job" role="status"><span>${esc(job.label)}<small>${job.background ? '完成后收进历史，可以继续做别的事。' : '一张原图，一对头像。'}</small></span>${job.background ? '<small>后台等待中</small>' : button('background', '转到后台', `data-pair-id="${job.id}"`)}</div>`).join('');
+        : `<div class="rmt-pair-job" role="status"><span>${esc(job.label)}<small>${job.background ? '完成后收进历史，可以继续做别的事。' : '一张原图，一对头像。'}</small></span>${job.background ? '<small>后台等待中</small>' : button('background', '转到后台', `data-pair-id="${job.id}"`)}${button('stop-job', '停止等待', `data-pair-id="${job.id}"`)}</div>`).join('');
 }
 async function renderPreview(view) {
     if (!current(view)) return;
@@ -374,6 +374,9 @@ async function renderHistory(view) {
     if (!pager) { pager = document.createElement('nav'); pager.className = 'rmt-pair-pagination'; pager.dataset.pairHistoryPages = ''; pager.setAttribute('aria-label', '头像翻页'); target.after(pager); }
     pager.hidden = !rows.length;
     pager.innerHTML = `${button('history-prev', '上一页', view.historyPage === 1 ? 'disabled' : '')}<span role="status">第 ${view.historyPage} / ${pages} 页</span>${button('history-next', '下一页', view.historyPage === pages ? 'disabled' : '')}`;
+    // Keep decoded originals only for this page and the pair being previewed.
+    const keep = new Set([...visible.map(row => row.original.url), recordFor(view)?.original.url].filter(Boolean));
+    for (const url of [...view.images.keys()]) if (!keep.has(url)) view.images.delete(url);
     const nodes = [...target.querySelectorAll('[data-pair-thumb]')];
     // Current-page thumbnails load immediately. Some TT WebViews never deliver
     // IntersectionObserver callbacks inside this overlay's nested scroller.
@@ -383,8 +386,8 @@ async function renderHistory(view) {
         try {
             const loaded = await loadRecord(view, record);
             if (current(view) && token === view.historyEpoch && node.isConnected) {
-                const previews = pairPreviews(record, loaded);
-                node.replaceChildren(square(record, 0, loaded, '', previews.images[0]), square(record, 1, loaded, '', previews.images[1]));
+                // Thumbnails are CSS crops of the original: no full-size PNG export per card.
+                node.replaceChildren(square(record, 0, loaded), square(record, 1, loaded));
             }
         }
         catch { if (node.isConnected) { node.title = '原图暂时不可用，点击后可查看记录或导入原图。'; const note = node.querySelector('.rmt-pair-thumb-note'); if (note) note.textContent = '原图暂不可用'; } }
@@ -590,6 +593,13 @@ async function handleAction(view, action, target) {
     if (action === 'export') return downloadText(await couple.exportCouples(view.scope));
     if (action === 'dismiss-job') { const job = jobs.get(target.dataset.pairId); if (job?.scope === view.scope && job.status === 'failed') { jobs.delete(job.id); renderJobs(view); } return; }
     if (action === 'background') { const job = jobs.get(target.dataset.pairId); if (job) { job.background = true; job.controller.abort(); renderJobs(view); report(view, '已转到后台等待，出图后会保存在这次聊天的历史中。'); } return; }
+    if (action === 'stop-job') {
+        // Only this page stops waiting. The provider keeps its own lock; if the
+        // picture still arrives it is saved to this chat's history, never lost.
+        const job = jobs.get(target.dataset.pairId); if (!job || job.scope !== view.scope || job.status !== 'running') return;
+        job.status = 'stopped'; job.background = true; job.controller.abort(); jobs.delete(job.id);
+        renderJobs(view); report(view, '已停止等待。如果之后出图，仍会收进历史。'); return;
+    }
     if (action === 'filter-favorite') { view.favoritesOnly = !view.favoritesOnly; view.historyPage = 1; target.setAttribute('aria-pressed', String(view.favoritesOnly)); return renderHistory(view); }
     if (action === 'history-prev' || action === 'history-next') {
         view.historyPage += action === 'history-next' ? 1 : -1;
@@ -736,13 +746,26 @@ function resolveComposition(view, settings) {
     view.lastComposition = pick.id;
     return { ...settings, composition: pick.id };
 }
+const REPEAT_SUBMIT_MS = 3000;
 async function startGeneration(view) {
     if (!current(view)) return;
-    let settings = await nai45ReadySettings(view, draft(view));
-    if (!settings || !current(view)) return;
-    const filtered = await chibiFilteredSettings(view, settings);
-    if (!filtered || !current(view)) return;
-    settings = resolveComposition(view, filtered);
+    const key = JSON.stringify(draft(view)), now = Date.now();
+    // A double tap on 生成 must not pay twice. A different setup may still run
+    // alongside; the same setup is ignored while being prepared or for ~3 s.
+    if (view.preparingSubmit === key || (view.lastSubmit?.key === key && now - view.lastSubmit.at < REPEAT_SUBMIT_MS)) {
+        report(view, '刚刚已经开始画这一对了，请稍等。'); return;
+    }
+    view.preparingSubmit = key;
+    let chosen = null;
+    try {
+        let settings = await nai45ReadySettings(view, draft(view));
+        if (!settings || !current(view)) return;
+        const filtered = await chibiFilteredSettings(view, settings);
+        if (!filtered || !current(view)) return;
+        chosen = resolveComposition(view, filtered);
+        view.lastSubmit = { key, at: Date.now() };
+    } finally { if (view.preparingSubmit === key) view.preparingSubmit = ''; }
+    const settings = chosen;
     const id = `pair-job-${++sequence}`, controller = new AbortController(), epoch = view.selectedEpoch;
     const job = { id, scope: view.scope, controller, background: false, status: 'running', label: '正在绘制 · ' + styleLabel(settings) + (presets.COMPOSITION_VARIANTS.find(row => row.id === settings.composition) ? ' · ' + presets.COMPOSITION_VARIANTS.find(row => row.id === settings.composition).label : '') };
     jobs.set(id, job); renderJobs(view); report(view, '');
@@ -760,8 +783,11 @@ async function startGeneration(view) {
             report(receiver, result.durable ? '新的一对已收进历史。' : '已出图，本机保存未确认。请先保存图片或导出备份。');
         }
     } catch (error) {
-        job.status = 'failed';
-        job.message = text.safeErrorSummary(error) || '这次绘制没有完成，请重试。';
+        // A job the user stopped waiting for leaves no failure card behind.
+        if (job.status !== 'stopped') {
+            job.status = 'failed';
+            job.message = text.safeErrorSummary(error) || '这次绘制没有完成，请重试。';
+        }
     } finally {
         if (job.status !== 'failed') jobs.delete(id);
         if (active?.scope === job.scope) renderJobs(active);

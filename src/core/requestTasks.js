@@ -567,6 +567,24 @@ export function settledChatTaskRecord(id) {
     return row ? { ...row } : null;
 }
 
+// A finished row's follow-up (second step) acts on the chat it came from. It is
+// only offered/run while that exact chat is the open one, and never for a
+// detached archive target.
+export function settledChatTaskInCurrentChat(id, context = null) {
+    const row = recentChatTasks.find(item => item.id === String(id || ''));
+    if (!row || row.archiveTarget === true) return false;
+    return sameSettledChat(row, liveTaskContext(context));
+}
+
+// Running whole operations that still own this draft or mode. An automatic
+// continuation waits for these to settle instead of colliding with them.
+export function runningLogicalTasksForDraft({ mode = '', draftId = '' } = {}) {
+    const wantedMode = core_text.normalizeText(mode, 80);
+    const wantedDraft = core_text.normalizeText(draftId, 240);
+    return [...logicalGenerationTasks.values()].filter(task => (wantedDraft && task.draftId === wantedDraft)
+        || (wantedMode && (task.mode === wantedMode || (Array.isArray(task.pageIds) && task.pageIds.includes(wantedMode)))));
+}
+
 export function currentChatBlockingTasks(context = null) {
     try {
         return listChatTaskSnapshot(context).filter(row => row.running && row.currentChat).map(row => row.label);

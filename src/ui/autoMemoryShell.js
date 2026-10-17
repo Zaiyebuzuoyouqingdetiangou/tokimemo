@@ -36,6 +36,13 @@ let autoRepairLatch = '';
 let timer = 0;
 let stallState = { signature: '', since: 0 };
 let stallNoted = false;
+// 每 2 秒的兜底刷新只在楼层壳的输入真的变了时才重画。
+let lastSignature = null;
+let lastLivePhase = '';
+const incrementMemo = new Map();
+const INCREMENT_MEMO_MAX = 256;
+const writtenRound = new WeakMap();
+const achievementLookups = new WeakMap();
 
 export function floorShellCss() {
     return shell_state.floorShellCss();
@@ -50,7 +57,13 @@ function ensureCss() {
     document.head?.appendChild(style);
 }
 
+function dropModuleCss() {
+    document.getElementById('rmt-floor-module-css')?.remove();
+}
+
+// 模块样式约 1MB，只在真的有楼层壳挂出来时才复制一份，没有自动留忆的聊天不注入。
 function mirrorModuleCss() {
+    if (document.getElementById('rmt-floor-module-css')) return;
     try { ui_styles.ensureStyles(); } catch { /* 样式还没准备好时，楼层壳仍显示摘要。 */ }
     const source = document.getElementById(core_constants.STYLE_ID);
     if (!source || document.getElementById('rmt-floor-module-css')) return;
@@ -83,10 +96,17 @@ function latestAssistantIndex(chat) {
 
 function clearShells() {
     document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => node.remove());
+    dropModuleCss();
+}
+
+// 一次刷新里设置只读一次（整理设置不便宜，200 封信每封都读会占掉大半时间）。
+let refreshSettings = null;
+function pluginSettings() {
+    return refreshSettings || core_settings.getPluginSettings();
 }
 
 function latestFloorMode() {
-    return core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    return pluginSettings().autoMemoryLatestFloor === true;
 }
 
 function ticketForReveal(snapshot, reveal) {
@@ -104,6 +124,73 @@ function roundReveal(records, moduleId, ids, steps, ticket) {
     const busy = steps.some(step => step.status !== 'completed') || ticket?.status === 'drawn' || ticket?.status === 'running';
     if (busy || !moduleId) return null;
     return mine[0] || null;
+}
+
+// 一次刷新里共用的输入：自动留忆记录、档案、缓存、成就库只读一遍，楼层位置只扫一遍聊天。
+function tickInputs(context) {
+    const snapshot = readSnapshot(context);
+    let memory = null;
+    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+    let cache = null;
+    try { cache = cacheRef(core_cache.getCache(context)); } catch { cache = null; }
+    let achievements;
+    let lookup = null;
+    let index = null;
+    return {
+        context, snapshot, memory, cache,
+        achievements() {
+            if (achievements === undefined) {
+                // 只读查询：不复制整个成就库。
+                achievements = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: false }) || null;
+            }
+            return achievements;
+        },
+        achievementLookup() {
+            if (lookup) return lookup;
+            const session = this.achievements();
+            lookup = session && typeof session === 'object' ? achievementLookups.get(session) : null;
+            if (!lookup) {
+                lookup = auto_memory_library.autoAchievementLookup(session);
+                if (session && typeof session === 'object') achievementLookups.set(session, lookup);
+            }
+            return lookup;
+        },
+        locate(ticket) {
+            if (!index) index = chatIndex(context.chat);
+            const chat = Array.isArray(context.chat) ? context.chat : [];
+            const pinnedAt = ticket?.id ? index.pins.get(ticket.id) : undefined;
+            if (pinnedAt !== undefined) return { index: pinnedAt, message: chat[pinnedAt] };
+            const floor = Math.floor(Number(ticket?.dueFloor));
+            if (!(floor >= 1)) return null;
+            if (latestFloorMode()) {
+                const at = index.assistants[floor - 1];
+                return at === undefined ? null : { index: at, message: chat[at] };
+            }
+            const message = chat[floor - 1];
+            return message ? { index: floor - 1, message } : null;
+        },
+    };
+}
+
+// 压缩缓存还没解开时 getCache 每次给一个新的空对象；比较引用时把它当成“没有缓存”。
+function cacheRef(cache) {
+    if (!cache || typeof cache !== 'object') return null;
+    for (const _key in cache) return cache;
+    return null;
+}
+
+// 与 redo.findDrawMessage（第一处钉）和 drawFloorMessage（第 N 条角色楼）同义，一次扫完。
+function chatIndex(chat) {
+    const pins = new Map();
+    const assistants = [];
+    const list = Array.isArray(chat) ? chat : [];
+    for (let index = 0; index < list.length; index += 1) {
+        const message = list[index];
+        const pin = message?.extra?.[auto_memory_redo.DRAW_PIN_KEY];
+        if (pin && !pins.has(pin)) pins.set(pin, index);
+        if (message && message.is_user !== true && message.is_system !== true) assistants.push(index);
+    }
+    return { pins, assistants };
 }
 
 function readSnapshot(context) {
@@ -131,8 +218,8 @@ function archiveIsReady(context, rows) {
     return !!memory && !importing;
 }
 
-function viewFor(context) {
-    const snapshot = readSnapshot(context);
+function viewFor(context, tick = tickInputs(context)) {
+    const snapshot = tick.snapshot;
     if (!snapshot?.plan.enabled) return shell_state.shellView({ enabled: false });
     const ticket = snapshot.drawTickets.find(item => item.id === snapshot.plan.activeDrawTicketId) || null;
     const moduleId = snapshot.modulePlan?.moduleId || ticket?.selectedModuleId || '';
@@ -150,12 +237,12 @@ function viewFor(context) {
         running, partial: failedStep, hasContent: steps.some(step => step.status === 'completed'),
     });
     const moduleComplete = item?.isComplete?.(null, snapshot.modulePlan) === true;
-    const previewKept = moduleId ? incrementFor(moduleId, reveal?.id || '').kept === true : false;
+    const previewKept = moduleId ? incrementFor(moduleId, reveal?.id || '', tick).kept === true : false;
     const stored = auto_memory_library.autoAchievementForReveal(context, {
         achievementId: reveal?.achievementId || '',
         moduleId,
         sourceMemoryIds: [...roundIds],
-    });
+    }, { lookup: tick.achievementLookup() });
     const rememberedTitle = auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal?.achievementId);
     const rememberedCopy = auto_memory_gap.rememberedAchievementCopy(context.chatMetadata, reveal?.achievementId);
     return shell_state.shellView({
@@ -177,7 +264,7 @@ function viewFor(context) {
         canOpen: previewKept,
         failureRecoverable: !running && (failedStep || common.state === 'failed' || common.state === 'retry'),
         paused: moduleRow?.phase === 'queue',
-        floor: core_settings.getPluginSettings().autoMemoryLatestFloor === true
+        floor: pluginSettings().autoMemoryLatestFloor === true
             ? auto_memory_floor.assistantFloorCount(context.chat)
             : (Array.isArray(context.chat) ? context.chat.length : 0),
         nextDueFloor: snapshot.plan.nextDueFloor,
@@ -189,7 +276,7 @@ function viewFor(context) {
 
 function envelopeSkin() {
     let skin = 'pink';
-    try { skin = core_settings.getPluginSettings().heartEnvelopeSkin; } catch { skin = 'pink'; }
+    try { skin = pluginSettings().heartEnvelopeSkin; } catch { skin = 'pink'; }
     return ui_heartEnvelope.heartEnvelopeId(skin);
 }
 
@@ -292,16 +379,15 @@ function watchStall(view, context) {
     return view;
 }
 
-function viewForReveal(context, snapshot, reveal) {
-    const ticket = ticketForReveal(snapshot, reveal);
+function viewForReveal(context, snapshot, reveal, tick, ticket = ticketForReveal(snapshot, reveal)) {
     const moduleId = reveal.moduleId || '';
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
-    const previewKept = moduleId ? incrementFor(moduleId, reveal.id).kept === true : false;
+    const previewKept = moduleId ? incrementFor(moduleId, reveal.id, tick).kept === true : false;
     const stored = auto_memory_library.autoAchievementForReveal(context, {
         achievementId: reveal.achievementId || '',
         moduleId,
         sourceMemoryIds: [...(reveal.sourceMemoryIds || [])],
-    });
+    }, { lookup: tick.achievementLookup() });
     const rememberedTitle = auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal.achievementId);
     const rememberedCopy = auto_memory_gap.rememberedAchievementCopy(context.chatMetadata, reveal.achievementId);
     return shell_state.shellView({
@@ -326,23 +412,23 @@ function viewForReveal(context, snapshot, reveal) {
 }
 
 function letterSlots(context) {
-    const snapshot = readSnapshot(context);
+    const tick = tickInputs(context);
+    const snapshot = tick.snapshot;
     const slots = [];
     const seen = new Set();
     if (snapshot?.plan.enabled) {
         for (const reveal of snapshot.revealRecords || []) {
             if (reveal.status !== 'ready' && reveal.status !== 'opened' && reveal.status !== 'achievement_pending') continue;
             const ticket = ticketForReveal(snapshot, reveal);
-            const pinned = ticket?.id ? auto_memory_redo.findDrawMessage(context.chat, ticket.id) : null;
-            const located = pinned || auto_memory_redo.drawFloorMessage(context.chat, ticket?.dueFloor, latestFloorMode());
+            const located = tick.locate(ticket);
             if (!located) continue;
-            const view = viewForReveal(context, snapshot, reveal);
+            const view = viewForReveal(context, snapshot, reveal, tick, ticket);
             if (view.phase === 'hidden') continue;
             slots.push({ key: reveal.id, drawId: ticket?.id || '', messageIndex: located.index, view: { ...view, opened: reveal.status === 'opened' } });
             seen.add(reveal.id);
         }
     }
-    const live = watchStall(viewFor(context), context);
+    const live = watchStall(viewFor(context, tick), context);
     const latest = latestAssistantIndex(context.chat);
     if (latest >= 0 && live.phase !== 'hidden') {
         const existing = live.revealId ? slots.find(slot => slot.key === live.revealId) : null;
@@ -382,9 +468,11 @@ function paintHost(host, view) {
         const achievement = host.querySelector('[data-rmt-letter-achievement]');
         const copy = host.querySelector('[data-rmt-letter-copy]');
         const detail = host.querySelector('[data-rmt-letter-detail]');
-        if (achievement && view.phase === 'reveal') achievement.textContent = view.title;
-        if (copy && view.phase === 'reveal') copy.textContent = view.achievementCopy || '';
-        if (detail && view.phase !== 'reveal') detail.textContent = view.detail || '正在生成中';
+        // 同样的字不重写：textContent 赋值会换掉文字节点，长按选中的字会丢。
+        const setText = (node, text) => { if (node && node.textContent !== text) node.textContent = text; };
+        if (view.phase === 'reveal') setText(achievement, view.title);
+        if (view.phase === 'reveal') setText(copy, view.achievementCopy || '');
+        if (view.phase !== 'reveal') setText(detail, view.detail || '正在生成中');
         if (view.phase !== 'reveal') closeLetter(host);
         host.querySelector('.rmt-heart-letter')?.classList.toggle('is-writing', view.phase === 'generating' || view.phase === 'planning');
         return;
@@ -415,6 +503,7 @@ function paint(context) {
     if (!auto_memory_floor.assistantBodyReady(context.chat, { generating: auto_memory_stream.generationOpen(context) })) return;
     if (ui_floor.writesMessageText()) return;
     const { slots, live } = letterSlots(context);
+    lastLivePhase = live.phase;
     const toast = shell_state.toastForTransition(lastPhase, live.phase, { line: live.title }, { initial: !sawPhase });
     sawPhase = true;
     lastPhase = live.phase;
@@ -429,7 +518,6 @@ function paint(context) {
         }
     }
     ensureCss();
-    mirrorModuleCss();
     const wanted = new Set();
     let pinsChanged = false;
     for (const slot of slots) {
@@ -440,7 +528,10 @@ function paint(context) {
             if (pin === 'changed') pinsChanged = true;
         }
         let host = [...mes.querySelectorAll('[data-rmt-floor-shell="1"]')].find(node => node.dataset.rmtLetterKey === slot.key);
-        if (!host) host = ui_floor.placeAfterMessage(mes);
+        if (!host) {
+            mirrorModuleCss();
+            host = ui_floor.placeAfterMessage(mes);
+        }
         if (!host) continue;
         host.dataset.rmtLetterKey = slot.key;
         wanted.add(host);
@@ -453,6 +544,8 @@ function paint(context) {
     document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => {
         if (!wanted.has(node)) node.remove();
     });
+    if (wanted.size) mirrorModuleCss();
+    else dropModuleCss();
     try { ui_taskCenter.syncLiveTaskStrip(); } catch { /* 任务条刷新失败时，楼层下面的状态仍保留。 */ }
     queueAutomaticRepair(live);
 }
@@ -479,7 +572,7 @@ function queueAutomaticRepair(view) {
         autoRepairLatch = '';
         return;
     }
-    if (core_settings.getPluginSettings().autoRetryEnabled !== true) return;
+    if (pluginSettings().autoRetryEnabled !== true) return;
     const token = `${view.phase}|${view.revealId}|${view.moduleId}|${view.canRepairAchievement ? 'achievement' : 'module'}`;
     if (autoRepairLatch === token) return;
     autoRepairLatch = token;
@@ -491,6 +584,16 @@ function queueAutomaticRepair(view) {
 }
 
 function sync() {
+    try {
+        try { refreshSettings = core_settings.getPluginSettings(); } catch { refreshSettings = null; }
+        syncNow();
+    } finally {
+        lastSignature = shellSignature();
+        refreshSettings = null;
+    }
+}
+
+function syncNow() {
     let context;
     try { context = core_context.getContext(); }
     catch { clearShells(); return; }
@@ -504,10 +607,67 @@ function sync() {
     }
 }
 
-function incrementFor(moduleId, revealId) {
+// 楼层壳要读的东西：聊天与楼层、自动留忆四个记录、档案、模块缓存、设置、任务行、流式状态、页面上的壳。
+// 都是引用或短值，逐项 === 比较，不复制、不解析。
+function shellSignature() {
+    let context;
+    try { context = core_context.getContext(); } catch { return null; }
+    if (!context) return null;
+    const metadata = context.chatMetadata && typeof context.chatMetadata === 'object' ? context.chatMetadata : {};
+    const chat = Array.isArray(context.chat) ? context.chat : null;
+    const last = chat?.[chat.length - 1];
+    let cache = null;
+    try { cache = cacheRef(core_cache.getCache(context)); } catch { cache = null; }
+    let settings = {};
+    try { settings = pluginSettings() || {}; } catch { settings = {}; }
+    let rows = '';
     try {
-        const context = core_context.currentCharacterGuard();
-        const snapshot = readSnapshot(context);
+        rows = core_requestCoordinator.listChatTaskSnapshot(context)
+            .filter(row => row.currentChat)
+            .map(row => `${row.id}:${row.kind}:${row.phase}:${row.running ? 1 : 0}:${row.progressText || ''}`)
+            .join('|');
+    } catch { rows = ''; }
+    let story = false, generating = false;
+    try { story = auto_memory_scheduler.storyStillWriting(context); } catch { story = false; }
+    try { generating = auto_memory_stream.generationOpen(context); } catch { generating = false; }
+    let chatNodes = -1, shells = -1;
+    try {
+        chatNodes = document.getElementById('chat')?.childElementCount ?? -1;
+        shells = document.querySelectorAll('[data-rmt-floor-shell]').length;
+    } catch { /* 没有 DOM 时只比数据。 */ }
+    let chatId = '';
+    try { chatId = core_context.getChatId(context); } catch { chatId = ''; }
+    return [
+        chatId, context.characterId, context.groupId, context.name1, context.name2,
+        chat, chat?.length ?? -1, last, last?.mes, last?.swipe_id, last?.extra?.[auto_memory_redo.DRAW_PIN_KEY],
+        metadata[auto_memory_plan.AUTO_MEMORY_PLAN_KEY], metadata[auto_memory_plan.AUTO_MEMORY_PLAN_KEY]?.revision,
+        metadata[auto_memory_plan.AUTO_MEMORY_REVEAL_KEY],
+        metadata[auto_memory_plan.AUTO_MEMORY_DRAW_TICKETS_KEY], metadata[auto_memory_plan.AUTO_MEMORY_MODULE_PLAN_KEY],
+        metadata[auto_memory_gap.GAP_KEY], metadata[auto_memory_redo.DRAW_PIN_LEDGER_KEY],
+        metadata[core_constants.MEMORY_KEY], metadata[core_constants.MEMORY_KEY]?.archiveRevision, metadata[core_constants.CACHE_KEY], cache, core_cache.cacheCommitToken(cache),
+        settings.autoMemoryLatestFloor, settings.heartEnvelopeSkin, settings.autoRetryEnabled,
+        rows, story, generating, chatNodes, shells,
+    ];
+}
+
+function sameSignature(a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return false;
+    return true;
+}
+
+// 主要靠酒馆事件刷新；定时器只兜底。正在写的时候照常每次都刷（停住检测要看时间），其余时候没变就跳过。
+function fallbackTick() {
+    const active = lastLivePhase === 'generating' || lastLivePhase === 'planning';
+    if (!active && sameSignature(shellSignature(), lastSignature)) return false;
+    sync();
+    return true;
+}
+
+function incrementFor(moduleId, revealId, tick = null) {
+    try {
+        const context = tick?.context || core_context.currentCharacterGuard();
+        const snapshot = tick ? tick.snapshot : readSnapshot(context);
         const reveal = snapshot?.revealRecords?.find(row => row.id === revealId && row.moduleId === moduleId)
             || snapshot?.revealRecords?.find(row => row.id === revealId);
         const ids = Array.isArray(reveal?.sourceMemoryIds) && reveal.sourceMemoryIds.length ? reveal.sourceMemoryIds : null;
@@ -519,15 +679,29 @@ function incrementFor(moduleId, revealId) {
             || (ticket?.sourceMemoryIds?.length ? ticket.sourceMemoryIds : null)
             || livePlan?.sourceMemoryIds
             || [];
-        const memory = archive_repository.getImportedMemory(context);
-        const session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
-        if (session && typeof session === 'object' && !session.kind && moduleId) session.kind = moduleId;
+        const memory = tick ? tick.memory : archive_repository.getImportedMemory(context);
+        let cache = null;
+        if (tick) cache = tick.cache;
+        else { try { cache = cacheRef(core_cache.getCache(context)); } catch { cache = null; } }
+        // 同一封信、同一份档案、同一份模块缓存，投影结果不会变；缓存对象或提交号一换就重算。
+        const key = JSON.stringify([core_context.getChatId(context), moduleId, revealId, memory?.archiveRevision || '',
+            sourceMemoryIds, reveal?.createdAt || 0]);
+        const raw = cache && typeof cache === 'object' ? cache[moduleId] : undefined;
+        const token = core_cache.cacheCommitToken(cache);
+        const hit = incrementMemo.get(key);
+        if (hit && hit.cache === cache && hit.raw === raw && hit.token === token && hit.memory === memory?.archiveRevision) return hit.value;
+        // 只读：投影只换出新的列表，不改原会话，所以不必先把整个模块会话复制一遍。
+        const loaded = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: false });
+        const session = loaded && typeof loaded === 'object' && !loaded.kind && moduleId ? { ...loaded, kind: moduleId } : loaded;
         // 只按这封信自己的档案编号收。当前这一轮的 frozenAt 会把旧信的段落判成更早的一轮。
-        return incremental_view.incrementalProjection(session, {
+        const value = incremental_view.incrementalProjection(session, {
             sourceMemoryIds,
             createdAt: reveal?.createdAt || 0,
             since: 0,
         });
+        if (incrementMemo.size >= INCREMENT_MEMO_MAX) incrementMemo.clear();
+        incrementMemo.set(key, { cache, raw, token, memory: memory?.archiveRevision, value });
+        return value;
     } catch {
         return { kept: false, session: null };
     }
@@ -553,21 +727,38 @@ function letterIdentity() {
 
 const EMPTY_ROUND = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
 
+// 内容没变就不重写 innerHTML：重写会清掉正在长按选中的文字。
+function setRoundHtml(body, html) {
+    if (writtenRound.get(body) === html && body.innerHTML) return;
+    body.innerHTML = html;
+    writtenRound.set(body, html);
+}
+
+function roundHtml(increment) {
+    const identity = letterIdentity();
+    const memo = increment.html;
+    const signature = `${identity.characterName}\n${identity.userName}\n${identity.charAvatar}\n${identity.userAvatar}`;
+    if (memo && memo.signature === signature) return memo.html;
+    const html = incremental_view.roundReadingHtml(increment.session, identity);
+    try { Object.defineProperty(increment, 'html', { value: { signature, html }, configurable: true, writable: true, enumerable: false }); } catch { /* 冻结对象就每次重算。 */ }
+    return html;
+}
+
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
     if (!increment.kept) {
         if (body.dataset.rmtLetterRead === '1' && body.innerHTML) return false;
         const phase = body.closest?.('[data-rmt-floor-shell]')?.dataset?.rmtPhase || '';
         const writing = phase === 'generating' || phase === 'planning';
-        body.innerHTML = writing ? '<p class="rmt-floor-note">回忆正在生成中。</p>' : EMPTY_ROUND;
+        setRoundHtml(body, writing ? '<p class="rmt-floor-note">回忆正在生成中。</p>' : EMPTY_ROUND);
         return false;
     }
-    const html = incremental_view.roundReadingHtml(increment.session, letterIdentity());
+    const html = roundHtml(increment);
     if (!html) {
-        body.innerHTML = EMPTY_ROUND;
+        setRoundHtml(body, EMPTY_ROUND);
         return false;
     }
-    body.innerHTML = html;
+    setRoundHtml(body, html);
     const host = body.closest?.('[data-rmt-floor-shell]');
     if (host && revealId) {
         host.dataset.rmtRead = revealId;
@@ -744,6 +935,9 @@ export function stopAutoMemoryShell() {
     timer = 0;
     lastPhase = '';
     sawPhase = false;
+    lastSignature = null;
+    lastLivePhase = '';
+    incrementMemo.clear();
     clearShells();
 }
 
@@ -767,6 +961,12 @@ export function startAutoMemoryShell() {
     };
     const previous = cleanup;
     cleanup = () => { previous?.(); removeToggle(); };
-    timer = setInterval(sync, 2000);
+    timer = setInterval(fallbackTick, 2000);
     sync();
 }
+
+// 测试用：读出一次刷新的判断，不改任何状态。
+export const __autoMemoryShellTesting = Object.freeze({
+    sync, fallbackTick, shellSignature, sameSignature, incrementFor, writeRound, paintHost, letterSlots, tickInputs, chatIndex,
+    clearIncrementMemo: () => incrementMemo.clear(),
+});

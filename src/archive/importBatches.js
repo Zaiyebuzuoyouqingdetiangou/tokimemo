@@ -271,7 +271,8 @@ export function resolveBatchParts(progress, chatMessages, externalRecords) {
 }
 
 export function advanceProgress(progress, { pending = [], archiveRevision } = {}) {
-    const next = structuredClone(progress);
+    const { taskInputV1, ...rest } = progress || {};
+    const next = structuredClone(rest);
     // This is only a staged candidate. The caller must commit it with the bank by
     // CAS; it must NEVER publish it in state on a failed canonical save.
     delete next.partialParts;
@@ -283,6 +284,13 @@ export function advanceProgress(progress, { pending = [], archiveRevision } = {}
         // Finished sources are still identified by manifest hashes, but large captured
         // background text is not needed by any subsequent request.
         delete next.contextEnvelope; delete next.worldInfo;
-    }
+        // Nor is the full captured chat. Keep only what the save-time identity
+        // check reads from it: the original binding and identity.
+        if (taskInputV1?.data) {
+            const data = taskInputV1.data;
+            next.taskInputBinding = structuredClone({ version: 1, binding: data.binding, identity: data.identity,
+                fullFingerprint: data.snapshotForIdentity?.fullFingerprint || '' });
+        }
+    } else if (taskInputV1 !== undefined) next.taskInputV1 = structuredClone(taskInputV1);
     return checkedProgress(next);
 }

@@ -1,8 +1,9 @@
 // Native chat only. RabbitMirror owns its explicit avatar slots separately.
 // No card, Persona, message, or avatar filename is modified here.
 export function startChatAvatarDisplay({ getContext, getSnapshot, getScope, document: doc = globalThis.document } = {}) {
-    const applied = new Map(), owners = new WeakMap(), ownWrites = new WeakMap();
-    let stopped = false, queued = false, observer = null;
+    const applied = new Map(), ownWrites = new WeakMap();
+    let owners = new WeakMap();
+    let stopped = false, queued = false, observer = null, watching = '', personaTarget = null;
     function attr(element, name, value) {
         if (value == null) element.removeAttribute(name); else element.setAttribute(name, value);
         ownWrites.set(element, { src: element.getAttribute('src'), srcset: element.getAttribute('srcset') });
@@ -42,14 +43,16 @@ export function startChatAvatarDisplay({ getContext, getSnapshot, getScope, docu
             if (!image.isConnected || !snapshot || snapshot.scope !== scope || state.scope !== scope
                 || !current || current.message !== state.message || current.role !== state.role) restore(image, state);
         }
-        if (!scope) return;
+        // No pair for this chat: nothing to apply, so do not walk every avatar or watch the chat
+        // (streamed replies would otherwise rescan on every chunk). Only Persona switches matter.
+        if (!scope || !snapshot || snapshot.scope !== scope) { watch(applied.size ? 'chat' : 'persona'); return; }
+        watch('chat');
         for (const image of doc.querySelectorAll('#chat .mes[mesid] .avatar img')) {
             const current = actor(image, context);
             if (!current) continue;
             const owner = owners.get(image);
             if (owner && (owner.nativeScope !== nativeScope || owner.message !== current.message)) continue;
             owners.set(image, { nativeScope, message: current.message });
-            if (!snapshot || snapshot.scope !== scope) continue;
             const url = snapshot[current.role]?.url;
             if (!url) continue;
             let state = applied.get(image);
@@ -68,11 +71,26 @@ export function startChatAvatarDisplay({ getContext, getSnapshot, getScope, docu
         queued = true; queueMicrotask(scan);
     }
     const Observer = doc?.defaultView?.MutationObserver || globalThis.MutationObserver;
+    const OPTIONS = { subtree: true, childList: true, attributes: true,
+        attributeFilter: ['src', 'srcset', 'mesid', 'is_user', 'class', 'data-avatar-id'] };
+    // 'chat': the whole body (native chat avatars + Persona list). 'persona': only the Persona list,
+    // whose selection can change the scope to one that has a pair.
+    function watch(mode) {
+        if (!observer || stopped) return;
+        const target = mode === 'persona' ? doc.querySelector?.('#user_avatar_block') || null : doc.body;
+        if (watching === mode && personaTarget === target) return;
+        observer.disconnect();
+        watching = mode; personaTarget = target;
+        if (mode !== 'chat') owners = new WeakMap(); // Unobserved src changes would leave stale bindings.
+        if (target) observer.observe(target, OPTIONS);
+    }
     if (Observer && doc?.body) {
         observer = new Observer(records => {
             let relevant = false;
             const consumed = new Set();
             for (const record of records) {
+                // Streamed reply text never contains a native avatar; skip it before any other work.
+                if (record.target?.closest?.('.mes_text')) continue;
                 // Own mutations already have the desired values; do not schedule a loop.
                 if (record.type === 'attributes') {
                     const image = record.target;
@@ -98,8 +116,7 @@ export function startChatAvatarDisplay({ getContext, getSnapshot, getScope, docu
             for (const image of consumed) ownWrites.delete(image);
             if (relevant) refresh();
         });
-        observer.observe(doc.body, { subtree: true, childList: true, attributes: true,
-            attributeFilter: ['src', 'srcset', 'mesid', 'is_user', 'class', 'data-avatar-id'] });
+        watch('chat');
     }
     refresh();
     return { refresh, destroy() {
