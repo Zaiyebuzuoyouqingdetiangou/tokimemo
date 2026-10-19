@@ -377,6 +377,9 @@ function animalGestureTags(chosen) {
 
 // NAI 4.5 reads the people count from the base prompt. Only when both
 // appearances state a sex explicitly; never guessed from names.
+// The tag rendering of one style, for other features that draw in the same styles.
+export function coupleStyleTags(id) { return STYLE_TAGS[id] || ''; }
+
 export function coupleSexCountTags(appearances, subject = 'character') {
     if (subject !== 'character' || !Array.isArray(appearances) || appearances.length !== 2) return '';
     const sexes = appearances.map(value => {

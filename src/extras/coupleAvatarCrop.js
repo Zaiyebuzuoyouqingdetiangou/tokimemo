@@ -12,7 +12,33 @@ export function normalizeCrop(value) {
         zoom: Math.max(1, number(value?.zoom, 1)),
         x: Math.max(-100, Math.min(100, number(value?.x, 0))),
         y: Math.max(-100, Math.min(100, number(value?.y, 0))),
+        // 'full': left/right may move across the whole picture, not only this
+        // half. Crops saved before this keep their old meaning exactly.
+        ...(value?.span === 'full' ? { span: 'full' } : {}),
     };
+}
+
+// Left edge of the crop window. Old crops stay inside their own half; at zoom 1
+// that half is exactly one window wide, so they could not move left/right at all.
+function cropLeft(width, start, halfWidth, size, c) {
+    if (c.span !== 'full') return start + (halfWidth - size) * (c.x + 100) / 200;
+    const centred = start + (halfWidth - size) / 2, max = Math.max(0, width - size);
+    return c.x < 0 ? centred + centred * c.x / 100 : centred + (max - centred) * c.x / 100;
+}
+
+// The same framing expressed as a full-width crop, so opening the editor never moves a picture.
+export function toFullSpanCrop(width, height, halfIndex, crop) {
+    const c = normalizeCrop(crop);
+    if (c.span === 'full') return c;
+    const d = dimensions(width, height), split = Math.floor(d.width / 2), right = Number(halfIndex) === 1;
+    const start = right ? split : 0, halfWidth = Math.max(1, right ? d.width - split : split);
+    const size = Math.max(1, Math.min(halfWidth, d.height) / c.zoom);
+    const left = cropLeft(d.width, start, halfWidth, size, c);
+    const centred = start + (halfWidth - size) / 2, max = Math.max(0, d.width - size);
+    let x = 0;
+    if (left < centred - 1e-9) x = centred > 0 ? (left - centred) / centred * 100 : 0;
+    else if (left > centred + 1e-9) x = max > centred ? (left - centred) / (max - centred) * 100 : 0;
+    return { ...c, x: Math.max(-100, Math.min(100, x)), span: 'full' };
 }
 
 function dimensions(width, height) {
@@ -29,7 +55,7 @@ export function cropRect(width, height, halfIndex, crop) {
     const halfWidth = Math.max(1, right ? d.width - split : split);
     const size = Math.max(1, Math.min(halfWidth, d.height) / c.zoom);
     return {
-        x: start + (halfWidth - size) * (c.x + 100) / 200,
+        x: cropLeft(d.width, start, halfWidth, size, c),
         y: (d.height - size) * (c.y + 100) / 200,
         size,
         outputSize: Math.max(1, Math.floor(size)),
