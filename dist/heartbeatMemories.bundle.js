@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 363
-// Source SHA-256: 0a3133d3886b55827ca6563c69f9f6982fddb73c84fbf8a153a31e725b8ecf56
+// Source SHA-256: 43f41af1e4cb8cc10a5b3b73d6232d542bc0d9eb7e153192f159ab4e0d6c6474
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1804,7 +1804,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.58\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 印象曲页新增「听这首歌」播放器：在 Suno 做好歌后，把歌曲链接粘回来（或选本机音频文件），就能直接在页面里听；制作手书时也直接用这首，不用再导一次。音源只存在这台设备上。\n- 播放器是唱片样式：播放时黑胶唱片从封套里滑出来转动，进度条可以拖动。导入链接、选择文件、移除音源都收在「更换音源」里。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 情侣头像选 NAI 4.5 时：两人外貌里写明了性别，会自动加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；外貌还是整句或中文写法时，外貌栏下会提示，点生成前也会问要不要先整理成英文 tag。\n- 柏宝绘角色库：名字写成 {{user}} / {{char}} 的条目也能对上当前的你和角色；名字只差全角半角、首尾空格或大小写也能对上，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌来自柏宝绘角色库的哪一条；没对上会说明原因（库里没有这个名字、有两条都对上、只写了衣着动作，或柏宝绘版本太旧）。\n- 修复图片设置里点了「保存外貌」、关掉再打开还是旧外貌的问题：现在会显示你上次保存的外貌，确认绘图后就用新外貌重画；这张图原来的记录不会被改。\n- 图片设置里「重新构思／提取外貌」整理出的外貌更完整：人设里写明的性别、发型、眼色、脸部特征、身高体型、配饰等都会保留，不再压成几个概括词。外貌栏能写的长度从 400 字放宽到 1200 字，自己手写的外貌按原样保存。\n- 修复用酒馆连接配置生成时总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走，不容易再被中转站掐断而出现「生成连接请求失败」。如果仍是完整响应、30 秒没收到数据就断开，提示会告诉你去「高级生成参数」改成「使用流式」。\n- 「内容」页「把勾选的项目排进任务中心」旁边多了「全选」。\n- 修复本地快速建档可能盖掉旧档案内容的问题：复制、分支或改名后的聊天里，旧档案一时读不到时，自动建档会以为“没有档案”而新建一份。现在只要聊天里留有旧档案、已生成内容、档案索引或本机备份的任何痕迹，自动建档和「本地快速建档」都不会新建。\n- 新建档案和完全重建前，会先显示这次要读多少层、大约多少字、预计几次请求、分几批。如果有标签占了很大一部分字数（比如其他插件写进聊天的旧总结），会列出来让你勾选不读；特别长的楼层也会单独列出来，并显示里面的开头，方便判断是不是旧总结。\n- 修复长聊天建档时反复提示「本批草稿尚未确认保存到本机」、点保存也没用的问题：聊天很长时这批草稿也很大，手机存进本机要好几秒，以前超过 5 秒就当作失败；现在按草稿大小放宽等待时间（最长 2 分钟），真的没存完也会说明是存得太慢。\n- 修复改过角色卡之后，这个聊天的建档、更新、继续、导出、丢弃全部报「本机草稿读取未完成」、什么都点不了的问题。\n- 档案不再在聊天文件里长期留着整份聊天原文的副本：建档完成后和每次「另起任务」都不会再额外占一份，聊天文件不会越用越大；暂停的旧草稿也会自动精简（还有没保存成果的草稿不动）。\n- 长聊天建档时手机卡顿明显减少；本机草稿保存超时但其实已经存进去时，不再导致之后每次保存都失败。\n- 流式生成改成「多久没收到新内容」才算超时，模型慢慢写长回复不会再在 3 分钟被掐断；真卡住时，已收到的内容会留成草稿，可以接着生成。\n- 模型回复的 JSON 有多余逗号、中文引号、注释、字符串里换行这类小毛病时，会先自动修补再读取，不用重新付费生成；回复格式小错不再被当成截断而自动付费续写。\n- 带思考过程标签的正常回复不再被误判成「返回了 HTML 页面」，真正的代理错误页仍会被拦下；推理把额度用完、回复为空时不再自动再付费重试。\n- 任务中心里属于其他聊天的「第二次生成」按钮不再对当前聊天生效。\n- 表情包：一组里有一张没画好，已经画好的会保留，只补画缺的；点「停止等待」后，正在画的那张画完也会留下；保存时切换了角色不会写错卡；保存和单张重画防双击。\n- 智绘姬：取消后，在它真正画完之前不会让你重复提交；画成功但返回的是图片链接时会自动存下来，不会当成失败再用另一个生图插件付费重画。柏宝绘画好但没存进图库时也会自动存下来。\n- CG 发给智绘姬时会明确带上横图或竖图尺寸（按你在智绘姬里设置的尺寸调换方向，正方形尺寸不动），不会沿用上一次请求的尺寸；歌曲封面和多格日常漫画按竖图发。\n- 情侣头像：生成防双击，可以「停止等待」；历史页缩略图更省内存。\n- 手机更流畅：自动记忆的信件不再每 2 秒整个重算，打开的信件不再反复重画（长按复制不会被打断）；聊天头像不再每条消息都从存储重新读取，也不再占用酒馆共用的本地存储（旧数据自动迁移）；没有自动记忆计划时不再往聊天页面塞大段样式；流式输出时头像和表情包不再反复全量扫描；印象曲音频关掉后释放内存。\n- 只用新版自动记忆计划的聊天，切换过去时也会自动唤醒，不用先手动打开一次档案。\n- 其他已有功能保持不变。\n";
+const RELEASE_README = "# 心迹回廊 1.0.58\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 印象曲页新增「听这首歌」播放器：在 Suno 做好歌后，把歌曲链接粘回来（或选本机音频文件），就能直接在页面里听；制作手书时也直接用这首，不用再导一次。音源只存在这台设备上。\n- 播放器是唱片样式：播放时黑胶唱片从封套里滑出来转动，进度条可以拖动。导入链接、选择文件、移除音源都收在「更换音源」里。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 情侣头像选 NAI 4.5 时：两人外貌里写明了性别，会自动加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；外貌还是整句或中文写法时，外貌栏下会提示，点生成前也会问要不要先整理成英文 tag。\n- 柏宝绘角色库：名字写成 {{user}} / {{char}} 的条目也能对上当前的你和角色；名字只差全角半角、首尾空格或大小写也能对上，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌来自柏宝绘角色库的哪一条；没对上会说明原因（库里没有这个名字、有两条都对上、只写了衣着动作，或柏宝绘版本太旧）。\n- 修复图片设置里点了「保存外貌」、关掉再打开还是旧外貌的问题：现在会显示你上次保存的外貌，确认绘图后就用新外貌重画；这张图原来的记录不会被改。\n- 图片设置里「重新构思／提取外貌」整理出的外貌更完整：人设里写明的性别、发型、眼色、脸部特征、身高体型、配饰等都会保留，不再压成几个概括词。外貌栏能写的长度从 400 字放宽到 1200 字，自己手写的外貌按原样保存。\n- 修复用酒馆连接配置生成时总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走，不容易再被中转站掐断而出现「生成连接请求失败」。如果仍是完整响应、30 秒没收到数据就断开，提示会告诉你去「高级生成参数」改成「使用流式」。\n- 「内容」页「把勾选的项目排进任务中心」旁边多了「全选」。\n- 修复本地快速建档可能盖掉旧档案内容的问题：复制、分支或改名后的聊天里，旧档案一时读不到时，自动建档会以为“没有档案”而新建一份。现在只要聊天里留有旧档案、已生成内容、档案索引或本机备份的任何痕迹，自动建档和「本地快速建档」都不会新建。\n- 新建档案和完全重建前，会先显示这次要读多少层、大约多少字、预计几次请求、分几批。如果有标签占了很大一部分字数（比如其他插件写进聊天的旧总结），会列出来让你勾选不读；特别长的楼层也会单独列出来，并显示里面的开头，方便判断是不是旧总结。\n- 修复长聊天建档时反复提示「本批草稿尚未确认保存到本机」、点保存也没用的问题：聊天很长时这批草稿也很大，手机存进本机要好几秒，以前超过 5 秒就当作失败；现在按草稿大小放宽等待时间（最长 2 分钟），真的没存完也会说明是存得太慢。\n- 修复改过角色卡之后，这个聊天的建档、更新、继续、导出、丢弃全部报「本机草稿读取未完成」、什么都点不了的问题。\n- 档案不再在聊天文件里长期留着整份聊天原文的副本：建档完成后和每次「另起任务」都不会再额外占一份，聊天文件不会越用越大；暂停的旧草稿也会自动精简（还有没保存成果的草稿不动）。\n- 长聊天建档时手机卡顿明显减少；本机草稿保存超时但其实已经存进去时，不再导致之后每次保存都失败。\n- 流式生成改成「多久没收到新内容」才算超时，模型慢慢写长回复不会再在 3 分钟被掐断；真卡住时，已收到的内容会留成草稿，可以接着生成。\n- 模型回复的 JSON 有多余逗号、中文引号、注释、字符串里换行这类小毛病时，会先自动修补再读取，不用重新付费生成；回复格式小错不再被当成截断而自动付费续写。\n- 带思考过程标签的正常回复不再被误判成「返回了 HTML 页面」，真正的代理错误页仍会被拦下；推理把额度用完、回复为空时不再自动再付费重试。\n- 任务中心里属于其他聊天的「第二次生成」按钮不再对当前聊天生效。\n- 表情包：一组里有一张没画好，已经画好的会保留，只补画缺的；点「停止等待」后，正在画的那张画完也会留下；保存时切换了角色不会写错卡；保存和单张重画防双击。\n- 智绘姬：取消后，在它真正画完之前不会让你重复提交；画成功但返回的是图片链接时会自动存下来，不会当成失败再用另一个生图插件付费重画。柏宝绘画好但没存进图库时也会自动存下来。\n- CG 发给智绘姬时会明确带上横图或竖图尺寸（按你在智绘姬里设置的尺寸调换方向，正方形尺寸不动），不会沿用上一次请求的尺寸；歌曲封面和多格日常漫画按竖图发。\n- 情侣头像：生成防双击，可以「停止等待」；历史页缩略图更省内存。\n- 手机更流畅：自动记忆的信件不再每 2 秒整个重算，打开的信件不再反复重画（长按复制不会被打断）；聊天头像不再每条消息都从存储重新读取，也不再占用酒馆共用的本地存储（旧数据自动迁移）；没有自动记忆计划时不再往聊天页面塞大段样式；流式输出时头像和表情包不再反复全量扫描；印象曲音频关掉后释放内存。\n- 只用新版自动记忆计划的聊天，切换过去时也会自动唤醒，不用先手动打开一次档案。\n- 表情包用 NAI 4.5 画时改用它更擅长的 tag 写法（白底、几行几列、留空隙），其他模型的写法不变；切图也更聪明了：奶油色、粉色或渐变的底也能按形状切开，多画了几个时只留最大的几个而不是把两个粘在一起，排列和要求不一样时按图上真实的空隙切。\n- 修复情侣头像「调整裁切」里左右移动没反应的问题：以前裁切框被限制在自己那一半，放大为 1 时一点都动不了；现在左右两边都能在整张图上左右移动，可以越过中线把人物放到正中。以前保存过的裁切位置不变。\n- 其他已有功能保持不变。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -2580,6 +2580,7 @@ function cropsOf(value) {
         // These bounds describe local crop geometry, never a generation prerequisite.
         zoom: Math.max(1, finite(value?.[index]?.zoom, 1)),
         x: bound(value?.[index]?.x, -100, 100, 0), y: bound(value?.[index]?.y, -100, 100, 0),
+        ...(value?.[index]?.span === 'full' ? { span: 'full' } : {}),
     }));
 }
 
@@ -3155,7 +3156,33 @@ function normalizeCrop(value) {
         zoom: Math.max(1, number(value?.zoom, 1)),
         x: Math.max(-100, Math.min(100, number(value?.x, 0))),
         y: Math.max(-100, Math.min(100, number(value?.y, 0))),
+        // 'full': left/right may move across the whole picture, not only this
+        // half. Crops saved before this keep their old meaning exactly.
+        ...(value?.span === 'full' ? { span: 'full' } : {}),
     };
+}
+
+// Left edge of the crop window. Old crops stay inside their own half; at zoom 1
+// that half is exactly one window wide, so they could not move left/right at all.
+function cropLeft(width, start, halfWidth, size, c) {
+    if (c.span !== 'full') return start + (halfWidth - size) * (c.x + 100) / 200;
+    const centred = start + (halfWidth - size) / 2, max = Math.max(0, width - size);
+    return c.x < 0 ? centred + centred * c.x / 100 : centred + (max - centred) * c.x / 100;
+}
+
+// The same framing expressed as a full-width crop, so opening the editor never moves a picture.
+function toFullSpanCrop(width, height, halfIndex, crop) {
+    const c = normalizeCrop(crop);
+    if (c.span === 'full') return c;
+    const d = dimensions(width, height), split = Math.floor(d.width / 2), right = Number(halfIndex) === 1;
+    const start = right ? split : 0, halfWidth = Math.max(1, right ? d.width - split : split);
+    const size = Math.max(1, Math.min(halfWidth, d.height) / c.zoom);
+    const left = cropLeft(d.width, start, halfWidth, size, c);
+    const centred = start + (halfWidth - size) / 2, max = Math.max(0, d.width - size);
+    let x = 0;
+    if (left < centred - 1e-9) x = centred > 0 ? (left - centred) / centred * 100 : 0;
+    else if (left > centred + 1e-9) x = max > centred ? (left - centred) / (max - centred) * 100 : 0;
+    return { ...c, x: Math.max(-100, Math.min(100, x)), span: 'full' };
 }
 
 function dimensions(width, height) {
@@ -3172,7 +3199,7 @@ function cropRect(width, height, halfIndex, crop) {
     const halfWidth = Math.max(1, right ? d.width - split : split);
     const size = Math.max(1, Math.min(halfWidth, d.height) / c.zoom);
     return {
-        x: start + (halfWidth - size) * (c.x + 100) / 200,
+        x: cropLeft(d.width, start, halfWidth, size, c),
         y: (d.height - size) * (c.y + 100) / 200,
         size,
         outputSize: Math.max(1, Math.floor(size)),
@@ -3308,6 +3335,7 @@ __m_extras_coupleAvatarCrop_js.fileToPairOriginal = fileToPairOriginal;
 __m_extras_coupleAvatarCrop_js.pngFile = pngFile;
 __m_extras_coupleAvatarCrop_js.defaultPairCrops = defaultPairCrops;
 __m_extras_coupleAvatarCrop_js.normalizeCrop = normalizeCrop;
+__m_extras_coupleAvatarCrop_js.toFullSpanCrop = toFullSpanCrop;
 __m_extras_coupleAvatarCrop_js.cropRect = cropRect;
 __m_extras_coupleAvatarCrop_js.cropPairImage = cropPairImage;
 __m_extras_coupleAvatarCrop_js.cropPreviewStyle = cropPreviewStyle;
@@ -3861,6 +3889,9 @@ function animalGestureTags(chosen) {
 
 // NAI 4.5 reads the people count from the base prompt. Only when both
 // appearances state a sex explicitly; never guessed from names.
+// The tag rendering of one style, for other features that draw in the same styles.
+function coupleStyleTags(id) { return STYLE_TAGS[id] || ''; }
+
 function coupleSexCountTags(appearances, subject = 'character') {
     if (subject !== 'character' || !Array.isArray(appearances) || appearances.length !== 2) return '';
     const sexes = appearances.map(value => {
@@ -3928,6 +3959,7 @@ function coupleAvatarTagParts({ mediumLead = '', naiStyle = value => value, medi
     };
 }
 
+__m_extras_coupleAvatarPromptFormat_js.coupleStyleTags = coupleStyleTags;
 __m_extras_coupleAvatarPromptFormat_js.coupleSexCountTags = coupleSexCountTags;
 __m_extras_coupleAvatarPromptFormat_js.coupleAvatarTagParts = coupleAvatarTagParts;
 }
@@ -6419,12 +6451,25 @@ function __init_extras_stickerImage_js() {
 // A sheet is RGBA data on a light background. Stickers are found as separate
 // shapes; when the background is not clean enough the sheet is cut by grid.
 
-// Light, nearly neutral pixels connected to the border are background.
+// The sheet's own background colour: the most common border colour. NAI 4.5
+// often paints a cream, pastel or softly shaded backdrop instead of pure white.
+function borderColour(data, width, height) {
+    const counts = new Map(), samples = [];
+    const step = Math.max(1, Math.floor((width + height) / 400));
+    const take = p => { const o = p * 4; if (data[o + 3] < 24) return; samples.push(p); const key = (data[o] >> 4) << 8 | (data[o + 1] >> 4) << 4 | data[o + 2] >> 4; counts.set(key, (counts.get(key) || 0) + 1); };
+    for (let x = 0; x < width; x += step) { take(x); take((height - 1) * width + x); }
+    for (let y = 0; y < height; y += step) { take(y * width); take(y * width + width - 1); }
+    if (!samples.length) return null;
+    let best = -1, top = 0;
+    for (const [key, n] of counts) if (n > top) { top = n; best = key; }
+    const near = samples.filter(p => { const o = p * 4; return Math.abs((data[o] >> 4) - (best >> 8)) <= 1 && Math.abs((data[o + 1] >> 4) - (best >> 4 & 15)) <= 1 && Math.abs((data[o + 2] >> 4) - (best & 15)) <= 1; });
+    // A real backdrop covers most of the border; otherwise fall back to white.
+    if (near.length < samples.length * 0.5) return null;
+    return [0, 1, 2].map(k => near.reduce((sum, p) => sum + data[p * 4 + k], 0) / near.length);
+}
+
 function backgroundTest(data, width, height) {
-    const corners = [0, width - 1, (height - 1) * width, height * width - 1];
-    const matte = [0, 1, 2].map(k => corners.reduce((sum, p) => sum + data[p * 4 + k], 0) / 4);
-    const usable = Math.min(...matte) >= 200 && Math.max(...matte) - Math.min(...matte) <= 24;
-    const ref = usable ? matte : [255, 255, 255];
+    const ref = borderColour(data, width, height) || [255, 255, 255];
     return index => {
         const o = index * 4;
         if (data[o + 3] < 24) return true;
@@ -6435,19 +6480,31 @@ function backgroundTest(data, width, height) {
     };
 }
 
+// A soft gradient drifts away from the border colour. Follow it step by step:
+// a pixel almost identical to the background pixel next to it is background too,
+// as long as it stays within a wide band of the border colour.
+function gradientStep(data, ref) {
+    return (p, from) => {
+        const o = p * 4, f = from * 4;
+        if (Math.abs(data[o] - data[f]) > 6 || Math.abs(data[o + 1] - data[f + 1]) > 6 || Math.abs(data[o + 2] - data[f + 2]) > 6) return false;
+        return Math.abs(data[o] - ref[0]) <= 70 && Math.abs(data[o + 1] - ref[1]) <= 70 && Math.abs(data[o + 2] - ref[2]) <= 70;
+    };
+}
+
 // 1 = background reachable from the border. Enclosed white (eyes, teeth,
 // a white shirt inside an outline) stays part of the sticker.
 function outsideMask(data, width, height) {
     const count = width * height, outside = new Uint8Array(count), queue = new Uint32Array(count);
     const bg = backgroundTest(data, width, height);
+    const ref = borderColour(data, width, height) || [255, 255, 255], drift = gradientStep(data, ref);
     let head = 0, tail = 0;
-    const add = p => { if (!outside[p] && bg(p)) { outside[p] = 1; queue[tail++] = p; } };
+    const add = (p, from = -1) => { if (!outside[p] && (bg(p) || (from >= 0 && drift(p, from)))) { outside[p] = 1; queue[tail++] = p; } };
     for (let x = 0; x < width; x++) { add(x); add((height - 1) * width + x); }
     for (let y = 0; y < height; y++) { add(y * width); add(y * width + width - 1); }
     while (head < tail) {
         const p = queue[head++], x = p % width;
-        if (x) add(p - 1); if (x + 1 < width) add(p + 1);
-        if (p >= width) add(p - width); if (p + width < count) add(p + width);
+        if (x) add(p - 1, p); if (x + 1 < width) add(p + 1, p);
+        if (p >= width) add(p - width, p); if (p + width < count) add(p + width, p);
     }
     return outside;
 }
@@ -6529,6 +6586,20 @@ function splitSheet(data, width, height, { rows = 3, cols = 2, count = rows * co
             }
         }
     }
+    // More full-size stickers than asked for (the model drew extra ones):
+    // keep the largest ones instead of gluing two stickers into one piece.
+    if (groups.length > count) {
+        const sizes = groups.map(g => g.area).sort((a, b) => b - a), typical = sizes[Math.min(count, sizes.length) - 1] || 0;
+        const full = groups.filter(g => g.area >= typical * 0.5);
+        // Only when they stand apart like separate stickers; pieces of one
+        // sticker sit close together and are joined below instead.
+        let apart = true;
+        for (let i = 0; i < full.length && apart; i++) for (let j = i + 1; j < full.length; j++) if (gapBetween(full[i], full[j]) < side * 0.025) { apart = false; break; }
+        if (full.length > count && apart) {
+            const keep = new Set([...full].sort((a, b) => b.area - a.area).slice(0, count));
+            groups = groups.filter(g => keep.has(g));
+        }
+    }
     while (groups.length > count) {
         let best = [0, 1], distance = Infinity;
         for (let i = 0; i < groups.length; i++) for (let j = i + 1; j < groups.length; j++) {
@@ -6545,8 +6616,11 @@ function splitSheet(data, width, height, { rows = 3, cols = 2, count = rows * co
             return { x0: group.x0, y0: group.y0, x1: group.x1, y1: group.y1, keep: p => !outside[p] && ids.has(labels[p]) };
         }) };
     }
-    const cells = gridRects(width, height, rows, cols).slice(0, count);
-    return { mode: 'grid', outside, pieces: cells.map(cell => {
+    // Before cutting blind by the requested grid, look for the real gaps: the
+    // model may have used a different arrangement (3 x 2 instead of 2 x 3).
+    const found = !grid ? bandCells(outside, width, height, count) : null;
+    const cells = found || gridRects(width, height, rows, cols).slice(0, count);
+    return { mode: found ? 'bands' : 'grid', outside, pieces: cells.map(cell => {
         let x0 = cell.x1, y0 = cell.y1, x1 = cell.x0, y1 = cell.y0;
         for (let y = cell.y0; y <= cell.y1; y++) for (let x = cell.x0; x <= cell.x1; x++) {
             if (outside[y * width + x]) continue;
@@ -6556,6 +6630,50 @@ function splitSheet(data, width, height, { rows = 3, cols = 2, count = rows * co
         return { x0, y0, x1, y1, keep: p => { const x = p % width, y = (p - x) / width;
             return !outside[p] && x >= cell.x0 && x <= cell.x1 && y >= cell.y0 && y <= cell.y1; } };
     }) };
+}
+
+// Empty rows / columns of background split the sheet into bands; when the
+// bands give exactly `count` non-empty cells, use those instead of a blind grid.
+function emptyRuns(occupied, length, minGap) {
+    const bands = []; let start = -1;
+    for (let i = 0; i <= length; i++) {
+        const busy = i < length && occupied[i];
+        if (busy && start < 0) start = i;
+        if (!busy && start >= 0) { bands.push([start, i - 1]); start = -1; }
+    }
+    // Join bands separated by a gap too thin to be a real space between stickers.
+    const joined = [];
+    for (const band of bands) {
+        const last = joined[joined.length - 1];
+        if (last && band[0] - last[1] - 1 < minGap) last[1] = band[1]; else joined.push([...band]);
+    }
+    return joined;
+}
+function bandCells(outside, width, height, count) {
+    const rowsBusy = new Uint8Array(height), minPixels = 2;
+    for (let y = 0; y < height; y++) { let n = 0; for (let x = 0; x < width; x++) if (!outside[y * width + x] && ++n >= minPixels) { rowsBusy[y] = 1; break; } }
+    const rowBands = emptyRuns(rowsBusy, height, Math.max(2, Math.round(height * 0.025)));
+    const cells = [];
+    for (const [y0, y1] of rowBands) {
+        const colsBusy = new Uint8Array(width);
+        for (let x = 0; x < width; x++) for (let y = y0; y <= y1; y++) if (!outside[y * width + x]) { colsBusy[x] = 1; break; }
+        for (const [x0, x1] of emptyRuns(colsBusy, width, Math.max(2, Math.round(width * 0.025)))) cells.push({ x0, y0, x1, y1 });
+    }
+    const areas = cells.map(c => (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1)).sort((a, b) => a - b);
+    if (cells.length === count && areas[0] >= areas[Math.floor(areas.length / 2)] * 0.15) return cells;
+    // Stickers touching inside a row hide their gap, but the rows themselves
+    // still show how the sheet was laid out: split each row evenly.
+    if (rowBands.length > 1 && count % rowBands.length === 0) {
+        const perRow = count / rowBands.length, even = [];
+        for (const [y0, y1] of rowBands) {
+            let x0 = width, x1 = -1;
+            for (let y = y0; y <= y1; y++) for (let x = 0; x < width; x++) if (!outside[y * width + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
+            if (x1 < x0) return null;
+            for (let k = 0; k < perRow; k++) even.push({ x0: Math.round(x0 + (x1 - x0 + 1) * k / perRow), y0, x1: Math.round(x0 + (x1 - x0 + 1) * (k + 1) / perRow) - 1, y1 });
+        }
+        return even;
+    }
+    return null;
 }
 
 // Largest single shape; used when one sticker is redrawn on its own.
@@ -6663,9 +6781,13 @@ const cg_core = __m_generation_cgImageCore_js;
 const generation_client = __m_generation_client_js;
 const couple = __m_extras_coupleAvatar_js;
 const couple_styles = __m_extras_coupleAvatarStyles_js;
+const couple_format = __m_extras_coupleAvatarPromptFormat_js;
+const core_settings = __m_core_settings_js;
 const pixels = __m_extras_stickerImage_js;
 // 表情包：写想法 → 模型列清单 → 一张图画一组 → 切开 → 存进自己的酒馆图片文件夹。
 // 数据放在角色卡的扩展字段里；世界书只写名字和意思，不写图片地址。
+
+
 
 
 
@@ -6756,8 +6878,33 @@ function positionName(layout, index) {
     return `row ${Math.floor(index / layout.cols) + 1}, ${index % layout.cols ? 'right' : 'left'}`;
 }
 
-function stickerSheetPrompt({ owner, styleId, items, people }) {
+function stickerPromptFormat(context) {
+    try { return core_settings.getPluginSettings(context).cgPromptFormat || ''; } catch { return ''; }
+}
+
+// NAI 4.5 reads comma tags far better than sentences: in prose it often paints
+// a coloured scene or lets stickers run together, which then cut badly. Same
+// content as the prose version, written as tags; other models keep the prose.
+function stickerSheetTags({ owner, styleId, items, people, layout }) {
+    const [char, user] = people, pair = owner === 'pair';
+    const subject = pair ? null : owner === 'user' ? user : char;
+    const single = layout.count === 1;
+    const tags = [
+        single ? 'single sticker, one chibi sticker, centered, white background, simple background, die-cut sticker, thick white outline'
+            : `sticker sheet, ${layout.count} chibi stickers, ${layout.rows} rows, ${layout.cols} columns, grid layout, white background, simple background, die-cut stickers, thick white outline, wide empty space between stickers, separated stickers`,
+        pair ? '2characters, same two characters in every sticker' : 'solo, same character in every sticker',
+        'expressive face, no text, no speech bubble, no border, no frame, no scenery',
+        couple_format.coupleStyleTags(styleId) || stylePrompt(styleId),
+        pair ? `${char.appearance || char.name}` : `${subject.appearance || subject.name}`,
+        ...(pair ? [`${user.appearance || user.name}`] : []),
+        ...items.map((item, index) => single ? `${item.prompt || item.name}` : `sticker ${index + 1}: ${item.prompt || item.name}`),
+    ];
+    return tags.map(part => String(part || '').replace(/\s*\n+\s*/g, ', ').trim()).filter(Boolean).join(', ');
+}
+
+function stickerSheetPrompt({ owner, styleId, items, people, promptFormat = '' }) {
     const layout = pixels.stickerLayout(owner, items.length);
+    if (promptFormat === 'nai45-tags') return { prompt: stickerSheetTags({ owner, styleId, items, people, layout }), layout };
     const [char, user] = people, pair = owner === 'pair';
     const subject = pair ? null : owner === 'user' ? user : char;
     const single = layout.count === 1;
@@ -6847,7 +6994,7 @@ async function drawStickerSheets({ owner, styleId, chunks, total = chunks.length
         let url = text(chunks[n].url);
         const reused = !!url;
         if (signal?.aborted) { failed.push({ chunk: index, items, url, message: STOPPED_MESSAGE }); continue; }
-        const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items, people });
+        const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items, people, promptFormat: stickerPromptFormat(context) });
         const report = update => { try { onProgress?.({ ...update, sheet: index + 1, sheets: total }); } catch { /* UI only. */ } };
         try {
             if (!url) {
@@ -6877,7 +7024,7 @@ async function drawStickerSet({ owner, styleId, items, people, context = core_co
 
 // One sticker on its own, e.g. "单张重画".
 async function drawSingleSticker({ owner, styleId, item, people, context = core_context.currentCharacterGuard(), signal = null, onProgress = null, targetKey = '' }) {
-    const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items: [item], people });
+    const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items: [item], people, promptFormat: stickerPromptFormat(context) });
     const url = await drawSheet(prompt, { ...layout, orientation: owner === 'pair' ? 'landscape' : 'portrait' }, context, { signal, onProgress, characterName: people[0]?.name || '', targetKey });
     const cut = await cutSheet(url, layout);
     return { url, ...cut.pieces[0] };
@@ -8601,7 +8748,8 @@ async function showCrop(view, record) {
     let loaded;
     try { loaded = await loadRecord(view, record); } catch (error) { return imageFailure(view, m, record, error); }
     if (modal !== m) return;
-    let side = 0; const edited = structuredClone(record.crops);
+    // Edited crops may move across the whole picture; the current framing is kept as is.
+    let side = 0; const edited = [0, 1].map(half => crop.toFullSpanCrop(loaded.width, loaded.height, half, record.crops?.[half]));
     m.body.innerHTML = `<div class="rmt-pair-choice">${[0, 1].map(i => `<button type="button" data-pair-crop-side="${i}" aria-pressed="${i === 0}">${i ? '右边' : '左边'} · ${esc(record.settings.people[record.order[i]]?.name || '')}</button>`).join('')}</div><p class="rmt-pair-note">只调整选中的这一边。保存后仍保留原图，随时可以重置。</p><div class="rmt-pair-crop-layout" style="margin-top:16px"><div data-pair-crop-stage></div><div class="rmt-pair-sliders">${[['zoom', '放大', 1, 3, .01], ['x', '左右移动', -100, 100, 1], ['y', '上下移动', -100, 100, 1]].map(([key, label, min, max, step]) => `<label>${label}<input type="range" data-pair-crop-control="${key}" min="${min}" max="${max}" step="${step}" aria-label="${label}"></label>`).join('')}<small data-pair-crop-pixels></small><button type="button" data-pair-crop-reset>重置这一边</button></div></div><div class="rmt-pair-actions"><button type="button" data-pair-crop-save class="rmt-pair-primary">保存裁切</button><button type="button" data-pair-close>取消</button></div>`;
     const draw = () => {
         const half = record.order[side], c = edited[half], preview = { ...record, crops: edited };
@@ -8621,7 +8769,7 @@ async function showCrop(view, record) {
     m.body.addEventListener('click', event => {
         const target = event.target.closest('button'); if (!target) return;
         if (target.hasAttribute('data-pair-crop-side')) { side = Number(target.dataset.pairCropSide); draw(); }
-        if (target.hasAttribute('data-pair-crop-reset')) { edited[record.order[side]] = crop.normalizeCrop(null); draw(); }
+        if (target.hasAttribute('data-pair-crop-reset')) { edited[record.order[side]] = crop.normalizeCrop({ span: 'full' }); draw(); }
         if (target.hasAttribute('data-pair-crop-save')) {
             target.disabled = true;
             void updateRecord(view, record, { crops: edited }).then(() => { if (modal === m) closeCoupleDialog(); }).catch(error => { target.disabled = false; failure(view, error); });

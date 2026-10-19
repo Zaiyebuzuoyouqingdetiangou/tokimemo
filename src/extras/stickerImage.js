@@ -2,12 +2,25 @@
 // A sheet is RGBA data on a light background. Stickers are found as separate
 // shapes; when the background is not clean enough the sheet is cut by grid.
 
-// Light, nearly neutral pixels connected to the border are background.
+// The sheet's own background colour: the most common border colour. NAI 4.5
+// often paints a cream, pastel or softly shaded backdrop instead of pure white.
+function borderColour(data, width, height) {
+    const counts = new Map(), samples = [];
+    const step = Math.max(1, Math.floor((width + height) / 400));
+    const take = p => { const o = p * 4; if (data[o + 3] < 24) return; samples.push(p); const key = (data[o] >> 4) << 8 | (data[o + 1] >> 4) << 4 | data[o + 2] >> 4; counts.set(key, (counts.get(key) || 0) + 1); };
+    for (let x = 0; x < width; x += step) { take(x); take((height - 1) * width + x); }
+    for (let y = 0; y < height; y += step) { take(y * width); take(y * width + width - 1); }
+    if (!samples.length) return null;
+    let best = -1, top = 0;
+    for (const [key, n] of counts) if (n > top) { top = n; best = key; }
+    const near = samples.filter(p => { const o = p * 4; return Math.abs((data[o] >> 4) - (best >> 8)) <= 1 && Math.abs((data[o + 1] >> 4) - (best >> 4 & 15)) <= 1 && Math.abs((data[o + 2] >> 4) - (best & 15)) <= 1; });
+    // A real backdrop covers most of the border; otherwise fall back to white.
+    if (near.length < samples.length * 0.5) return null;
+    return [0, 1, 2].map(k => near.reduce((sum, p) => sum + data[p * 4 + k], 0) / near.length);
+}
+
 function backgroundTest(data, width, height) {
-    const corners = [0, width - 1, (height - 1) * width, height * width - 1];
-    const matte = [0, 1, 2].map(k => corners.reduce((sum, p) => sum + data[p * 4 + k], 0) / 4);
-    const usable = Math.min(...matte) >= 200 && Math.max(...matte) - Math.min(...matte) <= 24;
-    const ref = usable ? matte : [255, 255, 255];
+    const ref = borderColour(data, width, height) || [255, 255, 255];
     return index => {
         const o = index * 4;
         if (data[o + 3] < 24) return true;
@@ -18,19 +31,31 @@ function backgroundTest(data, width, height) {
     };
 }
 
+// A soft gradient drifts away from the border colour. Follow it step by step:
+// a pixel almost identical to the background pixel next to it is background too,
+// as long as it stays within a wide band of the border colour.
+function gradientStep(data, ref) {
+    return (p, from) => {
+        const o = p * 4, f = from * 4;
+        if (Math.abs(data[o] - data[f]) > 6 || Math.abs(data[o + 1] - data[f + 1]) > 6 || Math.abs(data[o + 2] - data[f + 2]) > 6) return false;
+        return Math.abs(data[o] - ref[0]) <= 70 && Math.abs(data[o + 1] - ref[1]) <= 70 && Math.abs(data[o + 2] - ref[2]) <= 70;
+    };
+}
+
 // 1 = background reachable from the border. Enclosed white (eyes, teeth,
 // a white shirt inside an outline) stays part of the sticker.
 export function outsideMask(data, width, height) {
     const count = width * height, outside = new Uint8Array(count), queue = new Uint32Array(count);
     const bg = backgroundTest(data, width, height);
+    const ref = borderColour(data, width, height) || [255, 255, 255], drift = gradientStep(data, ref);
     let head = 0, tail = 0;
-    const add = p => { if (!outside[p] && bg(p)) { outside[p] = 1; queue[tail++] = p; } };
+    const add = (p, from = -1) => { if (!outside[p] && (bg(p) || (from >= 0 && drift(p, from)))) { outside[p] = 1; queue[tail++] = p; } };
     for (let x = 0; x < width; x++) { add(x); add((height - 1) * width + x); }
     for (let y = 0; y < height; y++) { add(y * width); add(y * width + width - 1); }
     while (head < tail) {
         const p = queue[head++], x = p % width;
-        if (x) add(p - 1); if (x + 1 < width) add(p + 1);
-        if (p >= width) add(p - width); if (p + width < count) add(p + width);
+        if (x) add(p - 1, p); if (x + 1 < width) add(p + 1, p);
+        if (p >= width) add(p - width, p); if (p + width < count) add(p + width, p);
     }
     return outside;
 }
@@ -112,6 +137,20 @@ export function splitSheet(data, width, height, { rows = 3, cols = 2, count = ro
             }
         }
     }
+    // More full-size stickers than asked for (the model drew extra ones):
+    // keep the largest ones instead of gluing two stickers into one piece.
+    if (groups.length > count) {
+        const sizes = groups.map(g => g.area).sort((a, b) => b - a), typical = sizes[Math.min(count, sizes.length) - 1] || 0;
+        const full = groups.filter(g => g.area >= typical * 0.5);
+        // Only when they stand apart like separate stickers; pieces of one
+        // sticker sit close together and are joined below instead.
+        let apart = true;
+        for (let i = 0; i < full.length && apart; i++) for (let j = i + 1; j < full.length; j++) if (gapBetween(full[i], full[j]) < side * 0.025) { apart = false; break; }
+        if (full.length > count && apart) {
+            const keep = new Set([...full].sort((a, b) => b.area - a.area).slice(0, count));
+            groups = groups.filter(g => keep.has(g));
+        }
+    }
     while (groups.length > count) {
         let best = [0, 1], distance = Infinity;
         for (let i = 0; i < groups.length; i++) for (let j = i + 1; j < groups.length; j++) {
@@ -128,8 +167,11 @@ export function splitSheet(data, width, height, { rows = 3, cols = 2, count = ro
             return { x0: group.x0, y0: group.y0, x1: group.x1, y1: group.y1, keep: p => !outside[p] && ids.has(labels[p]) };
         }) };
     }
-    const cells = gridRects(width, height, rows, cols).slice(0, count);
-    return { mode: 'grid', outside, pieces: cells.map(cell => {
+    // Before cutting blind by the requested grid, look for the real gaps: the
+    // model may have used a different arrangement (3 x 2 instead of 2 x 3).
+    const found = !grid ? bandCells(outside, width, height, count) : null;
+    const cells = found || gridRects(width, height, rows, cols).slice(0, count);
+    return { mode: found ? 'bands' : 'grid', outside, pieces: cells.map(cell => {
         let x0 = cell.x1, y0 = cell.y1, x1 = cell.x0, y1 = cell.y0;
         for (let y = cell.y0; y <= cell.y1; y++) for (let x = cell.x0; x <= cell.x1; x++) {
             if (outside[y * width + x]) continue;
@@ -139,6 +181,50 @@ export function splitSheet(data, width, height, { rows = 3, cols = 2, count = ro
         return { x0, y0, x1, y1, keep: p => { const x = p % width, y = (p - x) / width;
             return !outside[p] && x >= cell.x0 && x <= cell.x1 && y >= cell.y0 && y <= cell.y1; } };
     }) };
+}
+
+// Empty rows / columns of background split the sheet into bands; when the
+// bands give exactly `count` non-empty cells, use those instead of a blind grid.
+function emptyRuns(occupied, length, minGap) {
+    const bands = []; let start = -1;
+    for (let i = 0; i <= length; i++) {
+        const busy = i < length && occupied[i];
+        if (busy && start < 0) start = i;
+        if (!busy && start >= 0) { bands.push([start, i - 1]); start = -1; }
+    }
+    // Join bands separated by a gap too thin to be a real space between stickers.
+    const joined = [];
+    for (const band of bands) {
+        const last = joined[joined.length - 1];
+        if (last && band[0] - last[1] - 1 < minGap) last[1] = band[1]; else joined.push([...band]);
+    }
+    return joined;
+}
+function bandCells(outside, width, height, count) {
+    const rowsBusy = new Uint8Array(height), minPixels = 2;
+    for (let y = 0; y < height; y++) { let n = 0; for (let x = 0; x < width; x++) if (!outside[y * width + x] && ++n >= minPixels) { rowsBusy[y] = 1; break; } }
+    const rowBands = emptyRuns(rowsBusy, height, Math.max(2, Math.round(height * 0.025)));
+    const cells = [];
+    for (const [y0, y1] of rowBands) {
+        const colsBusy = new Uint8Array(width);
+        for (let x = 0; x < width; x++) for (let y = y0; y <= y1; y++) if (!outside[y * width + x]) { colsBusy[x] = 1; break; }
+        for (const [x0, x1] of emptyRuns(colsBusy, width, Math.max(2, Math.round(width * 0.025)))) cells.push({ x0, y0, x1, y1 });
+    }
+    const areas = cells.map(c => (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1)).sort((a, b) => a - b);
+    if (cells.length === count && areas[0] >= areas[Math.floor(areas.length / 2)] * 0.15) return cells;
+    // Stickers touching inside a row hide their gap, but the rows themselves
+    // still show how the sheet was laid out: split each row evenly.
+    if (rowBands.length > 1 && count % rowBands.length === 0) {
+        const perRow = count / rowBands.length, even = [];
+        for (const [y0, y1] of rowBands) {
+            let x0 = width, x1 = -1;
+            for (let y = y0; y <= y1; y++) for (let x = 0; x < width; x++) if (!outside[y * width + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
+            if (x1 < x0) return null;
+            for (let k = 0; k < perRow; k++) even.push({ x0: Math.round(x0 + (x1 - x0 + 1) * k / perRow), y0, x1: Math.round(x0 + (x1 - x0 + 1) * (k + 1) / perRow) - 1, y1 });
+        }
+        return even;
+    }
+    return null;
 }
 
 // Largest single shape; used when one sticker is redrawn on its own.
