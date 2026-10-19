@@ -8,6 +8,8 @@ import * as cg_core from '../generation/cgImageCore.js';
 import * as generation_client from '../generation/client.js';
 import * as couple from './coupleAvatar.js';
 import * as couple_styles from './coupleAvatarStyles.js';
+import * as couple_format from './coupleAvatarPromptFormat.js';
+import * as core_settings from '../core/settings.js';
 import * as pixels from './stickerImage.js';
 
 export const STICKER_MODE = 'stickers';
@@ -91,8 +93,33 @@ function positionName(layout, index) {
     return `row ${Math.floor(index / layout.cols) + 1}, ${index % layout.cols ? 'right' : 'left'}`;
 }
 
-export function stickerSheetPrompt({ owner, styleId, items, people }) {
+function stickerPromptFormat(context) {
+    try { return core_settings.getPluginSettings(context).cgPromptFormat || ''; } catch { return ''; }
+}
+
+// NAI 4.5 reads comma tags far better than sentences: in prose it often paints
+// a coloured scene or lets stickers run together, which then cut badly. Same
+// content as the prose version, written as tags; other models keep the prose.
+function stickerSheetTags({ owner, styleId, items, people, layout }) {
+    const [char, user] = people, pair = owner === 'pair';
+    const subject = pair ? null : owner === 'user' ? user : char;
+    const single = layout.count === 1;
+    const tags = [
+        single ? 'single sticker, one chibi sticker, centered, white background, simple background, die-cut sticker, thick white outline'
+            : `sticker sheet, ${layout.count} chibi stickers, ${layout.rows} rows, ${layout.cols} columns, grid layout, white background, simple background, die-cut stickers, thick white outline, wide empty space between stickers, separated stickers`,
+        pair ? '2characters, same two characters in every sticker' : 'solo, same character in every sticker',
+        'expressive face, no text, no speech bubble, no border, no frame, no scenery',
+        couple_format.coupleStyleTags(styleId) || stylePrompt(styleId),
+        pair ? `${char.appearance || char.name}` : `${subject.appearance || subject.name}`,
+        ...(pair ? [`${user.appearance || user.name}`] : []),
+        ...items.map((item, index) => single ? `${item.prompt || item.name}` : `sticker ${index + 1}: ${item.prompt || item.name}`),
+    ];
+    return tags.map(part => String(part || '').replace(/\s*\n+\s*/g, ', ').trim()).filter(Boolean).join(', ');
+}
+
+export function stickerSheetPrompt({ owner, styleId, items, people, promptFormat = '' }) {
     const layout = pixels.stickerLayout(owner, items.length);
+    if (promptFormat === 'nai45-tags') return { prompt: stickerSheetTags({ owner, styleId, items, people, layout }), layout };
     const [char, user] = people, pair = owner === 'pair';
     const subject = pair ? null : owner === 'user' ? user : char;
     const single = layout.count === 1;
@@ -182,7 +209,7 @@ export async function drawStickerSheets({ owner, styleId, chunks, total = chunks
         let url = text(chunks[n].url);
         const reused = !!url;
         if (signal?.aborted) { failed.push({ chunk: index, items, url, message: STOPPED_MESSAGE }); continue; }
-        const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items, people });
+        const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items, people, promptFormat: stickerPromptFormat(context) });
         const report = update => { try { onProgress?.({ ...update, sheet: index + 1, sheets: total }); } catch { /* UI only. */ } };
         try {
             if (!url) {
@@ -212,7 +239,7 @@ export async function drawStickerSet({ owner, styleId, items, people, context = 
 
 // One sticker on its own, e.g. "单张重画".
 export async function drawSingleSticker({ owner, styleId, item, people, context = core_context.currentCharacterGuard(), signal = null, onProgress = null, targetKey = '' }) {
-    const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items: [item], people });
+    const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items: [item], people, promptFormat: stickerPromptFormat(context) });
     const url = await drawSheet(prompt, { ...layout, orientation: owner === 'pair' ? 'landscape' : 'portrait' }, context, { signal, onProgress, characterName: people[0]?.name || '', targetKey });
     const cut = await cutSheet(url, layout);
     return { url, ...cut.pieces[0] };

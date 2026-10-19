@@ -377,6 +377,7 @@ function cropsOf(value) {
         // These bounds describe local crop geometry, never a generation prerequisite.
         zoom: Math.max(1, finite(value?.[index]?.zoom, 1)),
         x: bound(value?.[index]?.x, -100, 100, 0), y: bound(value?.[index]?.y, -100, 100, 0),
+        ...(value?.[index]?.span === 'full' ? { span: 'full' } : {}),
     }));
 }
 

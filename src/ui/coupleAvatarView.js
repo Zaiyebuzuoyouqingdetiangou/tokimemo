@@ -875,7 +875,8 @@ async function showCrop(view, record) {
     let loaded;
     try { loaded = await loadRecord(view, record); } catch (error) { return imageFailure(view, m, record, error); }
     if (modal !== m) return;
-    let side = 0; const edited = structuredClone(record.crops);
+    // Edited crops may move across the whole picture; the current framing is kept as is.
+    let side = 0; const edited = [0, 1].map(half => crop.toFullSpanCrop(loaded.width, loaded.height, half, record.crops?.[half]));
     m.body.innerHTML = `<div class="rmt-pair-choice">${[0, 1].map(i => `<button type="button" data-pair-crop-side="${i}" aria-pressed="${i === 0}">${i ? '右边' : '左边'} · ${esc(record.settings.people[record.order[i]]?.name || '')}</button>`).join('')}</div><p class="rmt-pair-note">只调整选中的这一边。保存后仍保留原图，随时可以重置。</p><div class="rmt-pair-crop-layout" style="margin-top:16px"><div data-pair-crop-stage></div><div class="rmt-pair-sliders">${[['zoom', '放大', 1, 3, .01], ['x', '左右移动', -100, 100, 1], ['y', '上下移动', -100, 100, 1]].map(([key, label, min, max, step]) => `<label>${label}<input type="range" data-pair-crop-control="${key}" min="${min}" max="${max}" step="${step}" aria-label="${label}"></label>`).join('')}<small data-pair-crop-pixels></small><button type="button" data-pair-crop-reset>重置这一边</button></div></div><div class="rmt-pair-actions"><button type="button" data-pair-crop-save class="rmt-pair-primary">保存裁切</button><button type="button" data-pair-close>取消</button></div>`;
     const draw = () => {
         const half = record.order[side], c = edited[half], preview = { ...record, crops: edited };
@@ -895,7 +896,7 @@ async function showCrop(view, record) {
     m.body.addEventListener('click', event => {
         const target = event.target.closest('button'); if (!target) return;
         if (target.hasAttribute('data-pair-crop-side')) { side = Number(target.dataset.pairCropSide); draw(); }
-        if (target.hasAttribute('data-pair-crop-reset')) { edited[record.order[side]] = crop.normalizeCrop(null); draw(); }
+        if (target.hasAttribute('data-pair-crop-reset')) { edited[record.order[side]] = crop.normalizeCrop({ span: 'full' }); draw(); }
         if (target.hasAttribute('data-pair-crop-save')) {
             target.disabled = true;
             void updateRecord(view, record, { crops: edited }).then(() => { if (modal === m) closeCoupleDialog(); }).catch(error => { target.disabled = false; failure(view, error); });
