@@ -36,6 +36,7 @@ import * as ui_overlay from '../ui/overlay.js';
 import * as ui_workspaceState from '../ui/workspaceState.js';
 
 import * as routePeople from '../core/routeParticipants.js';
+import * as letter_images from './letterImages.js';
 
 const PENDING_KEY = 'heartbeatMemoriesMergedPendingV1';
 
@@ -536,8 +537,16 @@ function saveMergedSession(context, memoryBank, origin) {
     return async (mode, session) => {
         assertMergedSaveIdentity(session, origin, memoryBank);
         assertMergedTarget(origin, context, memoryBank, mode);
+        let before = null;
+        if (mode === core_constants.MODE.INBOX) { try { before = core_cache.loadSession(mode); } catch { before = null; } }
         const committed = await core_cache.commitSession(mode, { ...session, chatId: origin.chatId, archiveRevision: origin.archiveRevision }, origin.chatId, origin);
         if (!committed) throw core_text.safeUserError('这一页的结果已经通过校验，但还没有写上。', 'RMT_MERGED_SAVE');
+        // 新信已保存：信末小画在后台交给生图插件画；从不影响这次保存。
+        if (mode === core_constants.MODE.INBOX) {
+            let saved = null;
+            try { saved = core_cache.loadSession(mode); } catch { saved = null; }
+            letter_images.scheduleLetterImages(saved || session, before);
+        }
     };
 }
 function restoredTask(snapshot, context, memoryBank, frozenInputs = {}) {

@@ -160,9 +160,75 @@ function exactEvidence(source, quote) {
     return !!source && quote.length >= 2 && String(source).normalize('NFKC').replace(/\s+/gu, ' ').includes(quote.normalize('NFKC').replace(/\s+/gu, ' '));
 }
 
-export function normalize(value) {
+// New mail (r84.200+) also carries a short English picture brief for the image
+// plugin and, once drawn, a reference to the saved picture. Both are optional;
+// the local drawing above stays the only thing rendered without a picture.
+const LOCAL_KEYS = Object.freeze(['version', 'characterName', 'focus', 'visualFacts', 'scene']);
+export const PICTURE_KEYS = Object.freeze(['summary', 'imagePrompt', 'imageUrl', 'imageUsedPrompt', 'imageProvider', 'imageGeneratedAt']);
+export const IMAGE_PROMPT_LIMIT = 400;
+function cleanBrief(value, max) {
+    if (typeof value !== 'string') return '';
+    const result = value.replace(/<[^>]*>/gu, ' ').replace(/https?:\/\/\S+/giu, ' ').replace(/[<>{}|\\`]/gu, ' ')
+        .replace(/[\u0000-\u001f\u007f]/gu, ' ').replace(/\s+/gu, ' ').replace(/\s+,/gu, ',').replace(/,(?:\s*,)+/gu, ',')
+        .replace(/^[\s,，]+|[\s,，]+$/gu, '').trim();
+    if (result.length <= max) return result;
+    const cut = result.slice(0, max), comma = cut.lastIndexOf(',');
+    return (comma > max / 2 ? cut.slice(0, comma) : cut).trim();
+}
+// Only a same-origin path (the user's own SillyTavern image folder) is kept.
+export function safeImageUrl(value) {
+    if (typeof value !== 'string' || !value || value.length > 2048 || /[\\\u0000-\u001f\u007f<>"'`]/u.test(value)) return '';
     try {
-        const raw = ownRecord(value, ['version', 'characterName', 'focus', 'visualFacts', 'scene']);
+        const href = globalThis.location?.href;
+        const base = typeof href === 'string' && /^https?:/u.test(href) ? href : 'http://localhost/';
+        const parsed = new URL(value.trim(), base);
+        if (parsed.origin !== new URL(base).origin || parsed.username || parsed.password || parsed.pathname.startsWith('//')) return '';
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch { return ''; }
+}
+// stored=false for provider output: a model may describe a picture, never point at one.
+export function pictureFields(raw, { stored = true } = {}) {
+    const result = {};
+    if (!raw || typeof raw !== 'object') return result;
+    const read = key => {
+        const descriptor = Object.getOwnPropertyDescriptor(raw, key);
+        return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
+    };
+    const summary = cleanBrief(read('summary'), 240);
+    const imagePrompt = cleanBrief(read('imagePrompt'), IMAGE_PROMPT_LIMIT);
+    if (summary) result.summary = summary;
+    if (imagePrompt) result.imagePrompt = imagePrompt;
+    if (!stored) return result;
+    const imageUrl = safeImageUrl(read('imageUrl'));
+    if (!imageUrl) return result;
+    result.imageUrl = imageUrl;
+    const used = cleanBrief(read('imageUsedPrompt'), 4000);
+    const provider = cleanBrief(read('imageProvider'), 40);
+    const at = Number(read('imageGeneratedAt'));
+    if (used) result.imageUsedPrompt = used;
+    if (provider) result.imageProvider = provider;
+    if (Number.isSafeInteger(at) && at > 0) result.imageGeneratedAt = at;
+    return result;
+}
+
+export function normalize(value, options = {}) {
+    try {
+        const all = ownRecord(value, [...LOCAL_KEYS, ...PICTURE_KEYS]);
+        if (!all || all.version !== VERSION) return null;
+        const picture = pictureFields(all, options);
+        const local = localDesign(all);
+        if (local) return Object.keys(picture).length ? { ...local, ...picture } : local;
+        // A brief without a drawable local design still lets the image plugin draw it.
+        if (!picture.imagePrompt) return null;
+        return { version: VERSION, characterName: plainText(all.characterName, 120), ...picture };
+    } catch { return null; }
+}
+// True when the record has the locally drawn template (not only a picture brief).
+export function hasLocalDrawing(value) { return !!normalize(value)?.focus; }
+
+function localDesign(value) {
+    try {
+        const raw = ownRecord(Object.fromEntries(LOCAL_KEYS.filter(key => Object.hasOwn(value, key)).map(key => [key, value[key]])), LOCAL_KEYS);
         if (!raw || raw.version !== VERSION || !FOCUS.includes(raw.focus)) return null;
         const characterName = plainText(raw.characterName, 120);
         if (!characterName || !Array.isArray(raw.visualFacts) || Object.getPrototypeOf(raw.visualFacts) !== Array.prototype
@@ -188,7 +254,8 @@ export function normalize(value) {
 export function normalizeGenerated(value, options = {}) {
     const { characterEvidence = '', letterText = '', characterNames = [] } = options;
     const names = Array.isArray(characterNames) ? characterNames.filter(name => typeof name === 'string' && name.trim()) : [];
-    const normalized = normalize(value);
+    // Only the local template fields are read here; picture fields are handled by the caller.
+    const normalized = value && typeof value === 'object' && !Array.isArray(value) ? localDesign(value) : null;
     if (normalized && names.includes(normalized.characterName)) {
         const source = evidenceFor(characterEvidence, normalized.characterName, names);
         if (exactEvidence(letterText, normalized.scene.evidence) && includesToken(normalized.scene.evidence, SCENE_TOKENS[normalized.scene.kind])) {
@@ -257,7 +324,7 @@ function signatureObject(kind, x = 110, y = 45) {
 
 export function render(value, { idPrefix = 'rmt-letter', label = '' } = {}) {
     const design = normalize(value);
-    if (!design) return '';
+    if (!design?.focus) return '';
     const titleId = `${safeId(idPrefix)}-illustration-title`;
     const named = typeof label === 'string' && label.trim().length > 0;
     const title = named ? `<title id="${titleId}">${esc(label.slice(0, 160))}</title>` : '';

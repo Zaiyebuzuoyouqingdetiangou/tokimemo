@@ -4,7 +4,7 @@ import * as v3 from './letterIllustrationV3.js';
 // Local, inert legacy letter-end illustration. Existing v1 mail keeps this exact renderer;
 // SVG structure, geometry, colours and accessibility markup stay in this file.
 export const LETTER_ILLUSTRATION_VERSION = 1;
-export const LETTER_ILLUSTRATION_GENERATION_VERSION = v3.VERSION;
+export const LETTER_ILLUSTRATION_GENERATION_VERSION = v2.VERSION;
 export const LETTER_ILLUSTRATION_SUBJECTS = Object.freeze(['person', 'pony', 'cat', 'rabbit', 'flowers', 'cup', 'book']);
 export const LETTER_ILLUSTRATION_ACTIONS = Object.freeze(['pet', 'hold', 'read', 'shareTea', 'rest', 'bloom']);
 export const LETTER_ILLUSTRATION_PALETTES = Object.freeze(['cream', 'rose', 'sage', 'sky', 'lilac', 'peach']);
@@ -12,8 +12,14 @@ export const LETTER_ILLUSTRATION_ACCESSORIES = Object.freeze(['heart', 'star', '
 export const MAX_LETTER_ILLUSTRATION_BYTES = 2048;
 export const MAX_LETTER_ILLUSTRATION_ACCESSORIES = 3;
 
-// Kept deliberately short so the parent prompt can include it without describing markup.
-export const LETTER_ILLUSTRATION_CONTRACT = v3.CONTRACT;
+// r84.200: new mail no longer asks the text model for SVG. Each art row carries the
+// local template fields (v2's own contract, unchanged) plus a short summary and an
+// English picture brief that the user's image plugin may draw. Saved v3 SVG still renders.
+export const LETTER_ILLUSTRATION_CONTRACT = '先完整输出 letters 中所有信的 slot、title、greeting、body、closing，再在同一份 JSON 的末尾输出 letterIllustrations 数组。每项对应一封信：{"slot":"对应信的 slot","summary":"简短记录本次具体情节、动作、表情、衣着和视角，供后续小画避重","imagePrompt":"English, comma-separated: who or what is in the picture, the concrete action, expression, clothing and props of this moment","version":2,"characterName":"本信人物真名","focus":"person或object","visualFacts":[…],"scene":{…}}。'
+    + 'summary 与 imagePrompt 每封信都写：imagePrompt 只用英文逗号短语描述本封信同一瞬间画里的人或物、具体动作、表情、衣着和道具，例如 "young man in a grey coat, crouching, petting a small white cat, gentle smile, holding an umbrella"；不写画风、画质词、人名或中文。'
+    + '其余本地小画字段（version、characterName、focus、visualFacts、scene）按下列规则填写，规则里的 letterIllustration 指这一项：' + v2.CONTRACT
+    + '这些本地小画字段没有依据时只省略它们，仍保留 slot、summary、imagePrompt。不输出 svg 或任何代码。全部在本次来信请求完成，不另发绘图请求；小画是信末附加内容，先保证信文完整。';
+const ART_LOCAL_KEYS = Object.freeze(['version', 'characterName', 'focus', 'visualFacts', 'scene']);
 
 const rootKeys = Object.freeze(['version', 'subject', 'companion', 'action', 'palette', 'accessories']);
 const paletteValues = Object.freeze({
@@ -88,17 +94,63 @@ export function normalizeLetterIllustration(value) {
     return normalizeLegacyLetterIllustration(value);
 }
 
+// New-letter art: local template (evidence-gated, with the original local fallback)
+// plus the summary/picture brief. Provider SVG and any provider image URL are ignored.
+export function normalizeNewLetterIllustration(value, options = {}) {
+    try {
+        const row = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+        const local = {};
+        for (const key of ART_LOCAL_KEYS) {
+            const descriptor = Object.getOwnPropertyDescriptor(row, key);
+            if (descriptor && Object.hasOwn(descriptor, 'value')) local[key] = descriptor.value;
+        }
+        local.version = v2.VERSION;
+        const design = v2.normalizeGenerated(local, options);
+        const picture = v2.pictureFields(row, { stored: false });
+        if (design) return v2.normalize({ ...design, ...picture });
+        return picture.imagePrompt ? v2.normalize({ version: v2.VERSION, characterName: typeof local.characterName === 'string' ? local.characterName : '', ...picture }) : null;
+    } catch { return null; }
+}
+
 export function normalizeGeneratedLetterIllustration(value, options = {}) {
     // Art is optional: no appearance/scene/length gate may reject the letter.
-    // Older output and failed SVG still have the original local fallback.
-    try { return v3.normalize(value) || v2.normalizeGenerated(value, options); }
-    catch { return null; }
+    return normalizeNewLetterIllustration(value, options);
+}
+
+// Recovery keeps a received art row when either the new or the saved v3 shape is readable.
+export function letterIllustrationRowUsable(row) {
+    try {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
+        if (row.version === v3.VERSION || typeof row.svg === 'string') return !!v3.normalize(row);
+        const local = {};
+        for (const key of [...ART_LOCAL_KEYS, 'summary', 'imagePrompt']) if (Object.hasOwn(row, key)) local[key] = row[key];
+        return !!v2.normalize({ ...local, version: v2.VERSION }, { stored: false });
+    } catch { return false; }
+}
+
+// The saved image-plugin picture of a new letter, if any.
+export function letterIllustrationPicture(value) {
+    if (value?.version !== v2.VERSION) return null;
+    const design = v2.normalize(value);
+    return design?.imageUrl ? { url: design.imageUrl, alt: design.summary || '' } : null;
+}
+// The English brief that the image plugin may draw (new letters only).
+export function letterIllustrationImagePrompt(value) {
+    if (value?.version !== v2.VERSION) return '';
+    return v2.normalize(value)?.imagePrompt || '';
+}
+export function hasLocalLetterDrawing(value) {
+    if (value?.version === v3.VERSION || typeof value?.svg === 'string') return !!v3.normalize(value);
+    if (value?.version === v2.VERSION) return v2.hasLocalDrawing(value);
+    return !!normalizeLegacyLetterIllustration(value);
 }
 
 export function letterIllustrationSummary(value) {
     const design = normalizeLetterIllustration(value);
     if (!design) return '';
     if (design.version === v3.VERSION) return design.summary || '';
+    if (design.version === v2.VERSION && design.summary) return design.summary;
+    if (design.version === v2.VERSION && !design.focus) return '';
     if (design.version === v2.VERSION) return [design.characterName, design.scene?.evidence,
         ...(design.visualFacts || []).filter(item => item.kind.startsWith('outfit')).map(item => item.evidence)].filter(Boolean).join('；');
     return [design.subject, design.action].filter(Boolean).join(' / ');
@@ -107,6 +159,7 @@ export function letterIllustrationSummary(value) {
 // Canvas export needs SVG bytes; the reading UI isolates new SVG in an image.
 export function renderLetterIllustrationSvg(value, options = {}) {
     if (value?.version === v3.VERSION || typeof value?.svg === 'string') return v3.svgSource(value);
+    if (value?.version === v2.VERSION) return v2.render(value, options);
     return renderLetterIllustration(value, options);
 }
 
@@ -169,9 +222,14 @@ function actionDetail(action, hasCompanion, colours, subject, primaryX) {
     return '';
 }
 
-export function renderLetterIllustration(value, { idPrefix = 'rmt-letter', label = '' } = {}) {
+export function renderLetterIllustration(value, { idPrefix = 'rmt-letter', label = '', local = false } = {}) {
     if (value?.version === v3.VERSION || typeof value?.svg === 'string') return v3.render(value, { idPrefix, label });
-    if (value?.version === v2.VERSION) return v2.render(value, { idPrefix, label });
+    if (value?.version === v2.VERSION) {
+        // A picture drawn by the user's image plugin replaces the local template drawing.
+        const picture = letterIllustrationPicture(value);
+        if (picture && !local) return `<img class="rmt-letter-illustration rmt-letter-picture" data-rmt-letter-illustration-version="2" data-rmt-letter-picture="drawn" src="${esc(picture.url)}" alt="${esc((picture.alt || label || '随信小画').slice(0, 240))}" loading="lazy" decoding="async" style="display:block;width:100%;max-width:320px;height:auto;margin:0 auto;border-radius:16px">`;
+        return v2.render(value, { idPrefix, label });
+    }
     const design = normalizeLegacyLetterIllustration(value);
     if (!design) return '';
     const colours = paletteValues[design.palette];

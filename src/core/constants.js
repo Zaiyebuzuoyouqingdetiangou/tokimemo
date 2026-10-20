@@ -230,6 +230,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
     imageGenerationFallback: false,
+    // New letters' end drawings go to the configured image plugin (when one is ready).
+    letterImageEnabled: true,
     cgPromptFormat: 'nai5-natural',
     // Optional r32-style mobile safe-area presentation. Off keeps the long-standing edge-to-edge fullscreen UI.
     ttDisplayMode: false,
