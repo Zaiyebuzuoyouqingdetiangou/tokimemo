@@ -76,7 +76,7 @@ function inboxSchema({ memoryBank, previousSession, operation = {}, frozenInputs
         return !!selected && m.recoveryCheck(() => inbox.normalizeInboxLetters({ letters: [row] }, memoryBank, [selected], new Date(date),
             { characterEvidence: inbox.frozenInboxCharacterEvidence(frozenInputs) }).letters.length);
     }), letterIllustrations: m.recoveryList(m.recoveryItemKey('slot'), null, row =>
-        plan.some(item => item.slot === row?.slot) && !!letterArt.normalizeLetterIllustration(row)) });
+        plan.some(item => item.slot === row?.slot) && letterArt.letterIllustrationRowUsable(row)) });
 }
 
 function itemsSchema({ memoryBank }) {

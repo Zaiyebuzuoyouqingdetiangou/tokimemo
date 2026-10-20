@@ -159,7 +159,7 @@ export function extractJournalEntries(mode, session) {
         const blocks = [];
         fields.forEach(field => textAt(item, field, (text, speaker) => blocks.push({type:'text',text,...(typeof speaker === 'string' ? {speaker} : {})})));
         blocks.push(...imageBlocks(item));
-        if (mode === 'inbox' && item.illustration) { const illustration=letterArt.normalizeLetterIllustration(item.illustration); if (illustration) blocks.push({type:'letterIllustration',illustration}); }
+        if (mode === 'inbox' && item.illustration) { const illustration=letterArt.normalizeLetterIllustration(item.illustration); if (illustration && (letterArt.hasLocalLetterDrawing(illustration) || letterArt.letterIllustrationPicture(illustration))) blocks.push({type:'letterIllustration',illustration}); }
         if (blocks.length) result.push({id:`${mode}:${path}:${sourceId}`,title,source:{mode,id:sourceId,title,path},blocks});
     };
     for (const [collection, fields] of JOURNAL_READING_FIELDS[mode] || []) {
