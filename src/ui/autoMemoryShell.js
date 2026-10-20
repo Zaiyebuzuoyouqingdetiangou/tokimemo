@@ -431,9 +431,12 @@ function letterSlots(context) {
     const live = watchStall(viewFor(context, tick), context);
     const latest = latestAssistantIndex(context.chat);
     if (latest >= 0 && live.phase !== 'hidden') {
-        const existing = live.revealId ? slots.find(slot => slot.key === live.revealId) : null;
+        // 倒计时只是借用了上一轮的信的编号：它属于最新一楼，不能盖掉出信那一楼的信封，
+        // 否则信封变成“留忆 还差几层”，后面的楼层也就再也没有提示。
+        const ownsLetter = live.revealId && live.phase !== 'pace';
+        const existing = ownsLetter ? slots.find(slot => slot.key === live.revealId) : null;
         if (existing) existing.view = { ...live, opened: existing.view.opened === true };
-        else slots.push({ key: live.revealId || `live:${latest}`, messageIndex: latest, view: live });
+        else slots.push({ key: ownsLetter ? live.revealId : `live:${latest}`, messageIndex: latest, view: live });
     }
     // r84.162：最新那一楼用信封，更早的楼都压缩成提示条。
     const newest = slots.reduce((max, slot) => Math.max(max, slot.messageIndex), -1);
