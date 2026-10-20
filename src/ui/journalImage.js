@@ -243,7 +243,10 @@ export async function renderJournalPageImage(page, index = 0, { renderIllustrati
                 let picture = null;
                 if (block.type === 'image') picture = await loadImage(block.url);
                 else if (block.type === 'letterIllustration' && typeof renderIllustration === 'function') {
-                    try { picture = await loadSvg(renderIllustration(block.illustration, `${entryIndex}-${blockIndex}`)); } catch { picture = null; }
+                    // A letter picture drawn by the image plugin is used when it loads; else the local drawing.
+                    const drawn = typeof block.illustration?.imageUrl === 'string' ? block.illustration.imageUrl : '';
+                    if (drawn) { try { picture = await loadImage(drawn); } catch { picture = null; } }
+                    if (!picture) { try { picture = await loadSvg(renderIllustration(block.illustration, `${entryIndex}-${blockIndex}`)); } catch { picture = null; } }
                 }
                 if (picture) { pictures.set(`${entryIndex}:${blockIndex}`, picture); disposers.push(picture.dispose); }
             }

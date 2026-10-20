@@ -13,6 +13,8 @@ import * as overlay from './overlay.js';
 import * as travelView from './travelView.js';
 import * as mailGallery from '../core/mailGallery.js';
 import * as extras_view from './extrasView.js';
+import * as core_settings from '../core/settings.js';
+import * as letter_images from '../generation/letterImages.js';
 
 let view = { scope: '', selected: '', filter: 'all' };
 const readonly = () => !!runtimeState.activeArchiveSnapshot && (runtimeState.activeArchiveReadOnly || runtimeState.activeArchiveSnapshot.backupOnly);
@@ -44,6 +46,7 @@ export function closeInboxLetter() {
 export function renderInbox() {
     const session = runtimeState.activeSession;
     if (session?.kind !== 'inbox') return;
+    letter_images.setLetterImageRefresher(refreshLetterImage);
     resetView(session);
     overlay.topTitle('你的邮箱');
     const selected = session.letters.find(letter => letter.id === view.selected);
@@ -52,14 +55,39 @@ export function renderInbox() {
     const stamp = mailStamp;
     const tab = (id, label) => `<button type="button" class="rmt-btn" data-rmt-inbox="filter" data-rmt-inbox-id="${id}" aria-pressed="${view.filter === id}">${label}</button>`;
     const drawing = selected ? letterArt.renderLetterIllustration(selected.illustration, { idPrefix: selected.id, label: '随信小画' }) : '';
+    const imageTools = selected && !selected.travelSnapshot ? letterImageToolsHtml(session, selected) : '';
     const detail = selected ? `<article class="rmt-mail-open">
         <div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-inbox="back">← 收件箱</button><button type="button" class="rmt-btn" data-rmt-inbox="favorite" data-rmt-inbox-id="${text.esc(selected.id)}" aria-pressed="${selected.favorite}" ${readonly() ? 'disabled' : ''}>${selected.favorite ? '已收藏' : '收藏这封信'}</button></div>
         ${selected.travelSnapshot ? travelView.travelPostcardHtml(selected.travelSnapshot.location, selected.travelSnapshot, { recipient: session.recipient, closeAction: 'inbox-back' })
-            : `<div class="rmt-mail-paper" data-rmt-paper="${inboxPaperTone(selected)}"><header><small>${letterTypeLabel(selected.type)} · TO ${text.esc(session.recipient || '你')} · ${text.esc(stamp(selected.createdAt))}</small><h2>${text.esc(selected.title)}</h2></header><b>${text.esc(selected.greeting)}</b><p>${text.esc(selected.body)}</p>${drawing ? `<figure class="rmt-letter-illustration" style="margin:24px auto;text-align:center">${drawing}</figure>` : ''}<footer>${text.esc(selected.closing || inboxSenderLabel(selected, session))}</footer></div>`}
+            : `<div class="rmt-mail-paper" data-rmt-paper="${inboxPaperTone(selected)}"><header><small>${letterTypeLabel(selected.type)} · TO ${text.esc(session.recipient || '你')} · ${text.esc(stamp(selected.createdAt))}</small><h2>${text.esc(selected.title)}</h2></header><b>${text.esc(selected.greeting)}</b><p>${text.esc(selected.body)}</p>${drawing ? `<figure class="rmt-letter-illustration" style="margin:24px auto;text-align:center">${drawing}</figure>` : ''}${imageTools}<footer>${text.esc(selected.closing || inboxSenderLabel(selected, session))}</footer></div>`}
     </article>` : `<nav class="rmt-mail-filters" aria-label="筛选信件">${tab('all','全部')}${tab('unread','未读')}${tab('favorite','收藏')}${tab('gallery','随信画册 · ' + mailGallery.savedMailDrawings(session).length)}</nav>${view.filter === 'gallery' ? inboxGalleryHtml(session) : `<div class="rmt-mail-list">${letters.map(letter =>
         `<button type="button" class="rmt-mail-row ${letter.readAt ? '' : 'is-unread'}" data-rmt-inbox="read" data-rmt-inbox-id="${text.esc(letter.id)}"><span class="rmt-mail-seal" aria-hidden="true">${letter.type === 'travel' ? '▧' : '✉'}</span><span><small>${letterTypeLabel(letter.type)} · ${text.esc(inboxSenderLabel(letter, session))} · ${text.esc(stamp(letter.createdAt))}${letter.favorite ? ' · 收藏' : ''}${!letter.readAt ? ' · 未读' : ''}</small><b>${text.esc(letter.title)}</b><span>${text.esc(letter.body.slice(0, 90))}</span></span><i aria-hidden="true">›</i></button>`).join('') || '<div class="rmt-mail-empty"><span aria-hidden="true">✉</span><h3>信箱里留着位置</h3><p>可以收一封今天的来信，也可以把路线中的明信片收进来。</p></div>'}</div>`}`;
-    overlay.bodyEl().innerHTML = `<section class="rmt-inbox"><header class="rmt-mail-header"><div><small>LETTERS TO YOU</small><h2>${text.esc(session.recipient || '你')}的邮箱</h2><p>${session.letters.length} 封来信 · ${session.letters.filter(item => !item.readAt).length} 封未读</p></div><div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-inbox="receive" ${readonly() ? 'disabled' : ''}>收取新信</button><button type="button" class="rmt-btn" data-rmt-inbox="postcards" ${readonly() ? 'disabled' : ''}>收进路线明信片</button></div></header>${detail}</section>`;
+    overlay.bodyEl().innerHTML = `<section class="rmt-inbox"><header class="rmt-mail-header"><div><small>LETTERS TO YOU</small><h2>${text.esc(session.recipient || '你')}的邮箱</h2><p>${session.letters.length} 封来信 · ${session.letters.filter(item => !item.readAt).length} 封未读</p></div><div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-inbox="receive" ${readonly() ? 'disabled' : ''}>收取新信</button><button type="button" class="rmt-btn" data-rmt-inbox="postcards" ${readonly() ? 'disabled' : ''}>收进路线明信片</button>${letterImageToggleHtml()}</div></header>${detail}</section>`;
     extras_view.decorateInbox(overlay.bodyEl(), !selected);
+}
+// 信末小画：生图插件画的小画状态、重画按钮和开关。画好前一直显示本地小画。
+function letterImageToolsHtml(session, letter) {
+    const stateNow = letter_images.letterImageStatus(session, letter);
+    if (stateNow === 'drawing') return '<p class="rmt-letter-image-note" role="status" style="margin:-12px 0 16px;text-align:center;font-size:12px;opacity:.72">小画正在画…</p>';
+    if (readonly() || runtimeState.activeArchiveSnapshot || !letterArt.letterIllustrationImagePrompt(letter.illustration)
+        || letterArt.letterIllustrationPicture(letter.illustration) || !letter_images.letterImageProvider()) return '';
+    return `<p class="rmt-letter-image-tools" style="margin:-8px 0 16px;text-align:center">${stateNow === 'failed' ? '<small style="display:block;margin-bottom:6px;opacity:.72">小画没画成，先用原来的小画。</small>' : ''}<button type="button" class="rmt-btn" data-rmt-inbox="letter-image" data-rmt-inbox-id="${text.esc(letter.id)}">用生图插件重画小画</button></p>`;
+}
+function letterImageToggleHtml() {
+    if (readonly() || runtimeState.activeArchiveSnapshot || !letter_images.letterImageProvider(null, { ignoreToggle: true })) return '';
+    const on = letter_images.letterImageEnabled();
+    return `<button type="button" class="rmt-btn" data-rmt-inbox="letter-image-toggle" aria-pressed="${on}" title="新信的信末小画交给已接好的生图插件画">信末小画用生图插件画：${on ? '开' : '关'}</button>`;
+}
+// Called after a background letter picture starts, fails or is saved. Only the same
+// chat's shown mailbox is refreshed; another chat or an archive view is never touched.
+export function refreshLetterImage(chatId, letterId, updated = null) {
+    const shown = runtimeState.activeSession;
+    if (runtimeState.activeMode !== 'inbox' || shown?.kind !== 'inbox' || runtimeState.activeArchiveSnapshot) return false;
+    if (contextApi.comparableChatId(shown.chatId) !== contextApi.comparableChatId(chatId)) return false;
+    if (updated?.kind === 'inbox' && sessionScope(updated) === sessionScope(shown) && shown.readableProgress?.complete !== false) runtimeState.activeSession = updated;
+    resetView(runtimeState.activeSession);
+    if (view.selected === letterId || view.filter === 'gallery') renderInbox();
+    return true;
 }
 // State changes use the same durable CAS as model output. Navigation never calls saveSession.
 export function assertShownInboxTarget() {
@@ -138,7 +166,7 @@ export async function mutateInbox(mutator) {
 export async function handleInboxAction(action, id = '') {
     try {
         if (runtimeState.activeMode !== 'inbox' || runtimeState.activeSession?.kind !== 'inbox') return;
-        if (['read', 'favorite', 'postcards', 'receive'].includes(action)) assertShownInboxTarget();
+        if (['read', 'favorite', 'postcards', 'receive', 'letter-image'].includes(action)) assertShownInboxTarget();
         resetView(runtimeState.activeSession);
         if (action === 'back') { view.selected = ''; return renderInbox(); }
         if (action === 'filter') { view.filter = ['all','unread','favorite','gallery'].includes(id) ? id : 'all'; view.selected = ''; return renderInbox(); }
@@ -147,6 +175,15 @@ export async function handleInboxAction(action, id = '') {
             view.selected = id;
             if (readonly() || runtimeState.activeSession.letters.find(letter => letter.id === id)?.readAt) return renderInbox();
             return await mutateInbox(session => { const letter = session.letters.find(item => item.id === id); if (letter && !letter.readAt) letter.readAt = Date.now(); return session; });
+        }
+        if (action === 'letter-image-toggle') {
+            core_settings.updatePluginSettings({ letterImageEnabled: !letter_images.letterImageEnabled() });
+            return renderInbox();
+        }
+        if (action === 'letter-image') {
+            if (readonly() || runtimeState.activeArchiveSnapshot) return;
+            letter_images.redrawLetterImage(runtimeState.activeSession, id);
+            return renderInbox();
         }
         if (action === 'favorite') return await mutateInbox(session => { const letter = session.letters.find(item => item.id === id); if (letter) letter.favorite = !letter.favorite; return session; });
         if (action === 'postcards') {

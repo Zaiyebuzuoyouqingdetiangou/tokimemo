@@ -68,6 +68,7 @@ import * as ui_contentManager from '../ui/contentManager.js';
 import * as navigation_bookmark from '../ui/navigationBookmark.js';
 import { buildWorldPresentationContext, captureAlbumParticipantSnapshot, captureModeParticipantSnapshot, captureRoomParticipantSnapshot, contentContextSources, generationWorldInfoScanTerms, modeTaskTraces } from './generationContext.js';
 import { requestValidatedSegment } from './generationRequest.js';
+import * as letter_images from './letterImages.js';
 import { beginModeRecovery, startAdvScriptSecondStep } from './generationSavedActions.js';
 // 各玩法生成主流程：继续已保存的生成、generateMode
 // 从 generation/client.js 原样搬出（重构阶段 2），声明文本一字未改；generation/client.js 仍转发原有导出。
@@ -714,6 +715,8 @@ async function generateModeOperation(mode, options = {}) {
                 ? core_cache.loadSession(mode, { chatId: expectedChatId, memoryBank, cache: runtimeState.activeArchiveSnapshot?.entryId === archiveTarget.entryId ? runtimeState.activeArchiveSnapshot.cache : archiveTarget.cache }) || session
                 : core_cache.loadSession(mode) || session;
         }
+        // 新信已保存：信末小画在后台交给生图插件画（未接插件或已关闭时什么也不做）。
+        if (committed && !archiveTarget && mode === core_constants.MODE.INBOX) letter_images.scheduleLetterImages(session, previousSession);
         if (replacementTicket) {
             core_taskTrace.endTaskTrace(taskTrace, committed ? 'ok' : 'deferred');
             return { status: committed ? 'committed' : 'deferred', session };
