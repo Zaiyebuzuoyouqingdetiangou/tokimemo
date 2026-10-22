@@ -74,7 +74,7 @@ ${root} .rmt-photoshoots *{box-sizing:border-box;min-width:0;overflow-wrap:anywh
 ${root} .rmt-photoshoots :is(summary,button){min-height:44px;cursor:pointer}
 ${root} .rmt-photoshoots>details,${root} .rmt-photoshoot-card{border:1px solid var(--rmt-theme-border);border-radius:18px;padding:18px;margin:18px 0;background:var(--rmt-theme-surface)}
 ${root} .rmt-photoshoot-plan label{display:grid;gap:7px;margin:14px 0}
-${root} .rmt-photoshoot-plan :is(input,textarea,select){width:100%;min-height:44px;padding:10px;font:inherit;font-size:16px;border:1px solid var(--rmt-theme-border);border-radius:9px;background:var(--rmt-theme-bg);color:inherit}
+${root} .rmt-photoshoot-plan :is(input,textarea,select){width:100%;min-height:44px;padding:10px;font:inherit;font-size:calc(16px*var(--rmt-font-scale,1));border:1px solid var(--rmt-theme-border);border-radius:9px;background:var(--rmt-theme-bg);color:inherit}
 ${root} .rmt-photoshoot-plan [data-rmt-photoshoot-moments]{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 ${root} .rmt-photoshoot-card .rmt-expanded-cg .rmt-thumb{aspect-ratio:9/16;max-height:none;width:min(100%,460px);margin:auto}
 @media(max-width:620px){${root} .rmt-photoshoot-plan [data-rmt-photoshoot-moments]{grid-template-columns:1fr}${root} .rmt-photoshoots{padding:14px}}

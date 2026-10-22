@@ -68,7 +68,7 @@ export function renderInbox() {
 // 信末小画：生图插件画的小画状态、重画按钮和开关。画好前一直显示本地小画。
 function letterImageToolsHtml(session, letter) {
     const stateNow = letter_images.letterImageStatus(session, letter);
-    if (stateNow === 'drawing') return '<p class="rmt-letter-image-note" role="status" style="margin:-12px 0 16px;text-align:center;font-size:12px;opacity:.72">小画正在画…</p>';
+    if (stateNow === 'drawing') return '<p class="rmt-letter-image-note" role="status" style="margin:-12px 0 16px;text-align:center;font-size:calc(12px*var(--rmt-font-scale,1));opacity:.72">小画正在画…</p>';
     if (readonly() || runtimeState.activeArchiveSnapshot || !letterArt.letterIllustrationImagePrompt(letter.illustration)
         || letterArt.letterIllustrationPicture(letter.illustration) || !letter_images.letterImageProvider()) return '';
     return `<p class="rmt-letter-image-tools" style="margin:-8px 0 16px;text-align:center">${stateNow === 'failed' ? '<small style="display:block;margin-bottom:6px;opacity:.72">小画没画成，先用原来的小画。</small>' : ''}<button type="button" class="rmt-btn" data-rmt-inbox="letter-image" data-rmt-inbox-id="${text.esc(letter.id)}">用生图插件重画小画</button></p>`;

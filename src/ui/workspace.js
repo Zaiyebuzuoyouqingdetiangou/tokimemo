@@ -180,7 +180,7 @@ export function arrangeArchiveWorkspace(body, { portals = [], ready = false, sna
             quick.className = 'rmt-archive-quick-update';
             quick.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px';
             quick.innerHTML = '<button type="button" class="rmt-btn" data-rmt-action="import-memory">增量更新当前窗口档案</button>'
-                + '<details class="rmt-archive-rebase" style="flex-basis:100%;font-size:13px"><summary>更新一直提示“历史基线不一致”？</summary>'
+                + '<details class="rmt-archive-rebase" style="flex-basis:100%;font-size:calc(13px*var(--rmt-font-scale,1))"><summary>更新一直提示“历史基线不一致”？</summary>'
                 + '<p style="margin:6px 0">隐藏、编辑或删除过比较早的消息时会出现。可以以当前聊天为新基线，只整理上次之后新增的楼层；已有记忆和生成内容都不变，旧楼层的改动不会重新整理。</p>'
                 + '<button type="button" class="rmt-btn" data-rmt-action="import-memory-rebase">以当前聊天为新基线继续更新</button></details>';
             main.appendChild(quick);
@@ -203,7 +203,7 @@ export function arrangeArchiveWorkspace(body, { portals = [], ready = false, sna
                 adopt.className = 'rmt-archive-adopt';
                 adopt.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:12px;border-radius:14px;border:2px solid var(--rmt-theme-accent,#ce729c)';
                 adopt.innerHTML = `<b>发现复制过来的档案</b><small>这个聊天里带着“${text.esc(foreign.archiveName || '心迹回廊档案')}”（${foreign.memories} 条记忆），通常是检查点或复制聊天时一起复制来的；因为聊天换了指纹，所以没有直接显示。</small>`
-                    + '<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" checked data-same-history><span>这个聊天就是原聊天的副本（只整理之后的新楼层）</span></label>'
+                    + '<label style="display:flex;gap:8px;align-items:center;font-size:calc(14px*var(--rmt-font-scale,1))"><input type="checkbox" checked data-same-history><span>这个聊天就是原聊天的副本（只整理之后的新楼层）</span></label>'
                     + '<button type="button" class="rmt-btn">接到当前聊天</button>';
                 adopt.querySelector('button').addEventListener('click', () => {
                     const sameHistory = !!adopt.querySelector('[data-same-history]')?.checked;
@@ -218,7 +218,7 @@ export function arrangeArchiveWorkspace(body, { portals = [], ready = false, sna
             box.className = 'rmt-archive-file-import';
             box.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:12px;border-radius:14px;border:1px dashed var(--rmt-theme-border,#cfdae5)';
             box.innerHTML = '<b>从档案文件导入</b><small>适合检查点副本、复制出来的聊天，或数据库恢复后档案不见了的情况。</small>'
-                + '<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" checked data-same-history><span>这个聊天就是导出时那个聊天的副本（只整理之后的新楼层）</span></label>'
+                + '<label style="display:flex;gap:8px;align-items:center;font-size:calc(14px*var(--rmt-font-scale,1))"><input type="checkbox" checked data-same-history><span>这个聊天就是导出时那个聊天的副本（只整理之后的新楼层）</span></label>'
                 + '<label class="rmt-btn" style="position:relative;display:inline-flex;align-items:center;justify-content:center;cursor:pointer">选择档案文件<input type="file" accept=".json,application/json" style="position:absolute;inset:0;opacity:0"></label>';
             box.querySelector('input[type=file]').addEventListener('change', event => {
                 const file = event.target.files?.[0];
