@@ -66,6 +66,24 @@ function safeReadableColor(requested, surface, fallback, minimum = 4.5) {
     return candidates.sort((left, right) => contrastRatio(right, surface) - contrastRatio(left, surface))[0] || '#111827';
 }
 
+export const FONT_SCALE_MIN = 0.8;
+export const FONT_SCALE_MAX = 1.25;
+export function normalizeFontScale(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number <= 0) return 1;
+    return Math.round(Math.max(FONT_SCALE_MIN, Math.min(FONT_SCALE_MAX, number)) * 20) / 20;
+}
+
+// 插件的字号都写成 calc(Npx*var(--rmt-font-scale,1))。变量放在页面根上，
+// 主界面、弹窗、聊天楼层里的信封都跟着变；没设置时等于 1，和以前一样。
+export function applyFontScale(settings, documentLike = globalThis.document) {
+    const root = documentLike?.documentElement;
+    if (!root?.style) return;
+    const scale = normalizeFontScale(settings?.fontScale);
+    if (scale === 1) root.style.removeProperty('--rmt-font-scale');
+    else if (root.style.getPropertyValue('--rmt-font-scale') !== String(scale)) root.style.setProperty('--rmt-font-scale', String(scale));
+}
+
 function normalizedThemeAlpha(value) {
     return Math.max(0.72, Math.min(1, Number(value) || 0.96));
 }
@@ -163,6 +181,7 @@ export function applyThemeToElement(element, settings, documentLike = globalThis
     if (!element?.style) return null;
     const { mode, palette } = resolveThemePalette(settings, documentLike);
     const alpha = normalizedThemeAlpha(settings?.themeAlpha);
+    applyFontScale(settings, documentLike);
     element.dataset.rmtThemeMode = mode;
     // Primary reading surfaces remain opaque. Card-only alpha composites over this known
     // background, so text contrast is checked against both the solid and effective card surface;

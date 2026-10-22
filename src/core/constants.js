@@ -239,6 +239,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
     floatingAvatarPosition: null,
     themeMode: 'default',
     themeAlpha: 0.96,
+    // 心迹回廊自己界面的字号倍数，只影响插件画出来的界面，不碰酒馆正文。
+    fontScale: 1,
     themeCustom: DEFAULT_THEME_PALETTE,
     // Applies only to newly model-generated derivative content. Never rewrite chat/archive evidence.
     bannedGeneratedPhrases: ['老子'],
