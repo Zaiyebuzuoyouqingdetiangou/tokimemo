@@ -80,7 +80,7 @@ export function mountMirrorReader(overlay) {
       <p class="rmt-mirror-status" role="status" aria-live="polite"></p>
       <small>音色由镜译配置；本次朗读使用所选音色。语音生成使用镜译所连服务的额度。切页或关闭会停止；已提交的生成请求可能仍会计费。</small>
       <style>
-      .rmt-mirror-reader{flex:0 0 auto;min-width:0;max-height:none;overflow:visible;padding:8px 16px;border-bottom:1px solid var(--rmt-theme-border,#cbd5e1);color:var(--rmt-theme-text,#344454);background:var(--rmt-theme-bg,#fff);font-size:14px}
+      .rmt-mirror-reader{flex:0 0 auto;min-width:0;max-height:none;overflow:visible;padding:8px 16px;border-bottom:1px solid var(--rmt-theme-border,#cbd5e1);color:var(--rmt-theme-text,#344454);background:var(--rmt-theme-bg,#fff);font-size:calc(14px*var(--rmt-font-scale,1))}
       .rmt-mirror-reader[hidden]{display:none!important}.rmt-mirror-reader summary{cursor:pointer;min-height:44px;display:list-item;align-content:center;font-weight:600}
       .rmt-mirror-controls{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       .rmt-mirror-controls button,.rmt-mirror-controls select{min-height:44px!important;height:auto!important;width:auto!important;max-width:100%;padding:8px 12px!important;border:1px solid var(--rmt-theme-border,#cbd5e1);border-radius:10px;color:inherit;background:var(--rmt-theme-surface-solid,#fff);font:inherit;white-space:normal}
@@ -89,7 +89,7 @@ export function mountMirrorReader(overlay) {
       .rmt-mirror-controls button:disabled{opacity:.55;cursor:not-allowed}
       .rmt-mirror-reader :focus-visible{outline:2px solid currentColor;outline-offset:2px}
       .rmt-mirror-status{margin:8px 0;overflow-wrap:anywhere}
-      .rmt-mirror-reader small{display:block;font-size:12px;line-height:1.6}
+      .rmt-mirror-reader small{display:block;font-size:calc(12px*var(--rmt-font-scale,1));line-height:1.6}
       </style>`;
     bar.hidden = true; overlay.append(bar);
     const voice = bar.querySelector('select');

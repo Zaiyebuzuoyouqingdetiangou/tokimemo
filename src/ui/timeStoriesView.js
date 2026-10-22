@@ -171,13 +171,13 @@ export function handleTimeStoryAction(action, id = '') {
 
 export function timeStoriesCss(root = '#' + constants.OVERLAY_ID + '[data-rmt-theme-mode] .rmt-body') {
     return `
-${root} .rmt-time-stories{--rmt-time-accent:var(--rmt-theme-accent-ink);max-width:1040px;margin-inline:auto;padding:clamp(14px,3vw,30px);color:var(--rmt-theme-text);background:var(--rmt-theme-bg);font-size:16px;line-height:1.8;min-width:0;writing-mode:horizontal-tb}
+${root} .rmt-time-stories{--rmt-time-accent:var(--rmt-theme-accent-ink);max-width:1040px;margin-inline:auto;padding:clamp(14px,3vw,30px);color:var(--rmt-theme-text);background:var(--rmt-theme-bg);font-size:calc(16px*var(--rmt-font-scale,1));line-height:1.8;min-width:0;writing-mode:horizontal-tb}
 ${root} .rmt-time-stories *{box-sizing:border-box;min-width:0;max-width:100%;overflow-wrap:anywhere}
 ${root} .rmt-time-stories p{margin:0 0 1em!important;white-space:pre-wrap}
 ${root} .rmt-time-stories :is(h2,h3){margin:4px 0 12px!important;color:inherit!important;line-height:1.4!important}
-${root} .rmt-time-stories h2{font-size:27px!important}
-${root} .rmt-time-stories h3{font-size:21px!important}
-${root} .rmt-time-stories small{font-size:13px;line-height:1.6;color:var(--rmt-theme-muted)}
+${root} .rmt-time-stories h2{font-size:calc(27px*var(--rmt-font-scale,1))!important}
+${root} .rmt-time-stories h3{font-size:calc(21px*var(--rmt-font-scale,1))!important}
+${root} .rmt-time-stories small{font-size:calc(13px*var(--rmt-font-scale,1));line-height:1.6;color:var(--rmt-theme-muted)}
 ${root} .rmt-time-stories button{min-height:44px;cursor:pointer;touch-action:manipulation;white-space:normal;line-height:1.5}
 ${root} .rmt-time-stories button:disabled{cursor:default}
 ${root} .rmt-time-stories button:focus-visible{outline:3px solid var(--rmt-time-accent)!important;outline-offset:3px}
@@ -188,22 +188,22 @@ ${root} .rmt-time-actions{display:flex;align-items:center;gap:10px;flex-wrap:wra
 ${root} .rmt-time-library{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 ${root} .rmt-time-cover{display:grid;grid-template-columns:32px minmax(0,1fr) 12px;align-items:center;gap:14px;padding:22px!important;text-align:left;border:1px solid var(--rmt-theme-border);border-radius:18px;background:var(--rmt-theme-surface)!important;color:var(--rmt-theme-text)!important;min-height:132px!important}
 ${root} .rmt-time-cover>span:nth-child(2){display:grid;gap:5px}
-${root} .rmt-time-cover b{font-size:20px}
-${root} .rmt-time-cover>i{color:var(--rmt-time-accent);font-size:25px}
+${root} .rmt-time-cover b{font-size:calc(20px*var(--rmt-font-scale,1))}
+${root} .rmt-time-cover>i{color:var(--rmt-time-accent);font-size:calc(25px*var(--rmt-font-scale,1))}
 ${root} .rmt-time-empty{text-align:center;padding:50px 18px;border:1px dashed var(--rmt-theme-border);border-radius:20px}
-${root} .rmt-time-empty>i{font-size:36px;color:var(--rmt-time-accent);margin-bottom:18px}
+${root} .rmt-time-empty>i{font-size:calc(36px*var(--rmt-font-scale,1));color:var(--rmt-time-accent);margin-bottom:18px}
 ${root} .rmt-time-connection{display:grid;grid-template-columns:minmax(0,1fr) minmax(64px,.7fr) minmax(0,1fr);align-items:center;gap:12px;padding:24px 12px;border:1px solid var(--rmt-theme-border);border-radius:24px;background:var(--rmt-theme-surface);margin-bottom:22px}
 ${root} .rmt-time-end{display:grid;gap:4px;text-align:center}
-${root} .rmt-time-end>b{font-size:22px}
-${root} .rmt-time-end>span{font-size:14px}
-${root} .rmt-time-medium{display:grid;place-items:center;gap:10px;text-align:center;font-size:13px;color:var(--rmt-time-accent);border-inline:1px solid var(--rmt-theme-border);padding-inline:8px}
-${root} .rmt-time-medium>i{font-size:30px}
+${root} .rmt-time-end>b{font-size:calc(22px*var(--rmt-font-scale,1))}
+${root} .rmt-time-end>span{font-size:calc(14px*var(--rmt-font-scale,1))}
+${root} .rmt-time-medium{display:grid;place-items:center;gap:10px;text-align:center;font-size:calc(13px*var(--rmt-font-scale,1));color:var(--rmt-time-accent);border-inline:1px solid var(--rmt-theme-border);padding-inline:8px}
+${root} .rmt-time-medium>i{font-size:calc(30px*var(--rmt-font-scale,1))}
 ${root} .rmt-time-prose,${root} .rmt-time-line{padding:clamp(18px,3vw,30px);border:1px solid var(--rmt-theme-border);border-radius:18px;background:var(--rmt-theme-surface);color:var(--rmt-theme-text);margin-bottom:18px}
 ${root} .rmt-time-line{border-left:4px solid var(--rmt-time-accent);min-height:210px}
 ${root} .rmt-time-line[data-rmt-time-speaker=b]{border-left-width:1px;border-right:4px solid var(--rmt-time-accent)}
 ${root} .rmt-time-line header{display:flex;gap:12px;justify-content:space-between;align-items:baseline;flex-wrap:wrap;margin-bottom:22px}
 ${root} .rmt-time-reading-controls{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0}
-${root} .rmt-time-reading-controls>span{font-size:13px;color:var(--rmt-theme-muted)}
+${root} .rmt-time-reading-controls>span{font-size:calc(13px*var(--rmt-font-scale,1));color:var(--rmt-theme-muted)}
 ${root} .rmt-time-stories[data-rmt-time-palette=rose]{--rmt-time-accent:#c36d89}
 ${root} .rmt-time-stories[data-rmt-time-palette=blue]{--rmt-time-accent:#679abe}
 ${root} .rmt-time-stories[data-rmt-time-palette=moss]{--rmt-time-accent:#77977b}
@@ -221,6 +221,6 @@ ${root} .rmt-phone-empty-terminal{width:min(620px,100%);margin:20px auto;padding
 ${root} .rmt-phone-empty-terminal .rmt-time-actions{display:flex;gap:12px;flex-wrap:wrap}
 ${root} .rmt-phone-empty-terminal button{min-height:44px;max-width:100%;white-space:normal}
 ${root} .rmt-phone-home-grid .rmt-phone-time-echo{min-height:64px}
-@media(max-width:600px){${root} .rmt-time-library{grid-template-columns:1fr}${root} .rmt-time-connection{gap:6px;padding:18px 8px}${root} .rmt-time-end>b{font-size:18px}${root} .rmt-time-end>span{font-size:12px}${root} .rmt-time-medium{padding-inline:4px}${root} .rmt-time-head{align-items:flex-start}}
+@media(max-width:600px){${root} .rmt-time-library{grid-template-columns:1fr}${root} .rmt-time-connection{gap:6px;padding:18px 8px}${root} .rmt-time-end>b{font-size:calc(18px*var(--rmt-font-scale,1))}${root} .rmt-time-end>span{font-size:calc(12px*var(--rmt-font-scale,1))}${root} .rmt-time-medium{padding-inline:4px}${root} .rmt-time-head{align-items:flex-start}}
 `;
 }

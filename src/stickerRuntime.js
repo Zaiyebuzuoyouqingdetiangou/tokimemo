@@ -23,20 +23,20 @@ const CSS = `
 #hearttrace_sticker_button[aria-expanded=true]{box-shadow:0 0 0 3px #de8fab88,0 2px 12px #0003}
 #hearttrace_sticker_button:focus-visible{outline:3px solid #de8fab;outline-offset:3px}
 #hearttrace_sticker_button[hidden]{display:none!important}
-#hearttrace-sticker-panel{position:fixed;z-index:9999;box-sizing:border-box;width:min(400px,calc(100vw - 16px));padding:10px;border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,.2));border-radius:16px;background:var(--SmartThemeBlurTintColor,rgba(28,28,30,.96));color:var(--SmartThemeBodyColor,#eee);backdrop-filter:blur(var(--SmartThemeBlurStrength,10px));-webkit-backdrop-filter:blur(var(--SmartThemeBlurStrength,10px));box-shadow:0 8px 28px #0005;display:flex;flex-direction:column;gap:8px;font-size:14px}
+#hearttrace-sticker-panel{position:fixed;z-index:9999;box-sizing:border-box;width:min(400px,calc(100vw - 16px));padding:10px;border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,.2));border-radius:16px;background:var(--SmartThemeBlurTintColor,rgba(28,28,30,.96));color:var(--SmartThemeBodyColor,#eee);backdrop-filter:blur(var(--SmartThemeBlurStrength,10px));-webkit-backdrop-filter:blur(var(--SmartThemeBlurStrength,10px));box-shadow:0 8px 28px #0005;display:flex;flex-direction:column;gap:8px;font-size:calc(14px*var(--rmt-font-scale,1))}
 #hearttrace-sticker-panel[hidden]{display:none!important}
 #hearttrace-sticker-panel *{box-sizing:border-box}
 .hearttrace-sticker-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:3px;border-radius:999px;border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,.2))}
 .hearttrace-sticker-tabs button{min-height:34px;border:0;border-radius:999px;background:transparent;color:inherit;font:inherit;cursor:pointer}
 .hearttrace-sticker-tabs button[aria-selected=true]{background:var(--SmartThemeQuoteColor,#e18a9b);color:var(--SmartThemeBlurTintColor,#111);font-weight:600}
 .hearttrace-sticker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;max-height:min(38vh,320px);overflow:auto;overscroll-behavior:contain}
-.hearttrace-sticker-grid button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 2px 4px;border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,.18));border-radius:12px;background:rgba(127,127,127,.08);color:inherit;font:inherit;font-size:12px;cursor:pointer;min-width:0}
+.hearttrace-sticker-grid button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 2px 4px;border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,.18));border-radius:12px;background:rgba(127,127,127,.08);color:inherit;font:inherit;font-size:calc(12px*var(--rmt-font-scale,1));cursor:pointer;min-width:0}
 .hearttrace-sticker-grid img{width:56px;height:56px;object-fit:contain}
 .hearttrace-sticker-grid span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hearttrace-sticker-empty{grid-column:1/-1;margin:8px 0;opacity:.75;font-size:12px;line-height:1.6;text-align:center}
+.hearttrace-sticker-empty{grid-column:1/-1;margin:8px 0;opacity:.75;font-size:calc(12px*var(--rmt-font-scale,1));line-height:1.6;text-align:center}
 .hearttrace-sticker-foot{display:flex;align-items:center;gap:8px}
-.hearttrace-sticker-note{flex:1;min-width:0;font-size:11px;opacity:.7;line-height:1.5}
-.hearttrace-sticker-foot button{flex:0 0 auto;min-height:30px;padding:0 12px;border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,.2));border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer}
+.hearttrace-sticker-note{flex:1;min-width:0;font-size:calc(11px*var(--rmt-font-scale,1));opacity:.7;line-height:1.5}
+.hearttrace-sticker-foot button{flex:0 0 auto;min-height:30px;padding:0 12px;border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,.2));border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:calc(12px*var(--rmt-font-scale,1));cursor:pointer}
 `;
 
 export function renderStickerTokens(root, ctx = context(), data = store.readStickerData(ctx)) {

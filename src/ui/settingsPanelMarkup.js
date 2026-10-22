@@ -101,6 +101,8 @@ export function renderSettingsPanelMarkup(panel) {
           <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="gs1">初叶绿</option><option value="gs2">海盐蓝</option><option value="gs3">花漾粉</option><option value="gs4">杏糖橙</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
           <label class="rmt-settings-field"><span>悬浮头像</span><select class="text_pole" data-rmt-floating-avatar><option value="char">角色 char（默认）</option><option value="user">用户 user</option><option value="off">关闭</option></select></label>
           <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
+          <label class="rmt-settings-field"><span>字体大小 <output data-rmt-font-scale-value></output></span><input data-rmt-font-scale type="range" min="0.8" max="1.25" step="0.05" aria-label="心迹回廊字体大小"></label>
+          <small>只改心迹回廊自己界面的字，默认 100%，不影响酒馆聊天正文。</small>
           <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
             <div class="rmt-theme-presets"><button type="button" data-rmt-theme-preset="day">从日间开始</button><button type="button" data-rmt-theme-preset="night">从夜间开始</button></div>
             <label><span>背景</span><input type="color" data-rmt-theme-color="background"></label>

@@ -92,6 +92,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         ...core_contextTags.savedTagSelection(settings),
         themeAlpha: Math.max(0.72, Math.min(1, Number.isFinite(Number(settings.themeAlpha)) ? Number(settings.themeAlpha) : core_constants.DEFAULT_SETTINGS.themeAlpha)),
         themeCustom: core_theme.normalizeThemeCustom(settings.themeCustom),
+        fontScale: core_theme.normalizeFontScale(settings.fontScale),
         bannedGeneratedPhrases: settings.bannedGeneratedPhrases === undefined
             ? [...core_constants.DEFAULT_SETTINGS.bannedGeneratedPhrases]
             : normalizeBannedGeneratedPhrases(settings.bannedGeneratedPhrases),

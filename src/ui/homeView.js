@@ -67,7 +67,7 @@ function changelogBlock(section) {
     if (section.groups?.length) {
         for (const group of section.groups) {
             const label = document.createElement('h3');
-            label.style.cssText = 'margin:16px 0 8px;font-size:14px;';
+            label.style.cssText = 'margin:16px 0 8px;font-size:calc(14px*var(--rmt-font-scale,1));';
             label.textContent = group.title;
             block.append(label);
             const list = document.createElement('ul');
@@ -133,10 +133,10 @@ function ensureUpdateSheet() {
     const card = document.createElement('section');
     card.setAttribute('role', 'dialog');
     card.setAttribute('aria-label', '更新日志');
-    card.style.cssText = 'width:min(440px,100%);max-height:min(78vh,720px);display:flex;flex-direction:column;box-sizing:border-box;padding:16px;border:1px solid var(--rmt-theme-border,#dce7ec);border-radius:15px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155);box-shadow:0 8px 30px #0004;font:14px/1.5 sans-serif;';
+    card.style.cssText = 'width:min(440px,100%);max-height:min(78vh,720px);display:flex;flex-direction:column;box-sizing:border-box;padding:16px;border:1px solid var(--rmt-theme-border,#dce7ec);border-radius:15px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155);box-shadow:0 8px 30px #0004;font:calc(14px*var(--rmt-font-scale,1))/1.5 sans-serif;';
     const title = document.createElement('strong');
     title.dataset.rmtUpdateTitle = 'true';
-    title.style.cssText = 'display:block;margin-bottom:8px;font-size:16px;';
+    title.style.cssText = 'display:block;margin-bottom:8px;font-size:calc(16px*var(--rmt-font-scale,1));';
     const sheetBody = document.createElement('div');
     sheetBody.dataset.rmtUpdateBody = 'true';
     sheetBody.style.cssText = 'overflow:auto;min-height:0;flex:1 1 auto;';
@@ -345,12 +345,12 @@ export function mountHomeDiagnostics(target) {
     style.textContent = `
 [data-rmt-home-diagnostic]{box-sizing:border-box;min-width:0;max-width:100%;margin-top:14px;padding:0 14px;border:1px solid var(--rmt-theme-line,#c6d8e7);border-radius:16px;color:inherit}
 [data-rmt-home-diagnostic] [hidden]{display:none!important}
-[data-rmt-home-diagnostic]>summary{box-sizing:border-box;min-height:46px;padding:14px 0;cursor:pointer;font-size:16px;writing-mode:horizontal-tb;touch-action:manipulation}
+[data-rmt-home-diagnostic]>summary{box-sizing:border-box;min-height:46px;padding:14px 0;cursor:pointer;font-size:calc(16px*var(--rmt-font-scale,1));writing-mode:horizontal-tb;touch-action:manipulation}
 [data-rmt-home-diagnostic]:not([open])>.rmt-home-diagnostic-body{display:none!important}
 [data-rmt-home-diagnostic] .rmt-home-diagnostic-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;min-width:0;max-width:100%}
 [data-rmt-home-diagnostic] button{box-sizing:border-box;width:100%;min-width:0;min-height:46px;height:auto;margin:0;padding:9px;white-space:normal;writing-mode:horizontal-tb;touch-action:manipulation}
-[data-rmt-home-diagnostic] [role="status"]{display:block;margin:8px 0;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
-[data-rmt-home-diagnostic] textarea{box-sizing:border-box;display:block;width:100%;max-width:100%;min-width:0;height:240px;margin-bottom:14px;padding:8px;font-size:12px;line-height:1.5;resize:vertical;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text;touch-action:auto;color:inherit;background:inherit}
+[data-rmt-home-diagnostic] [role="status"]{display:block;margin:8px 0;font-size:calc(13px*var(--rmt-font-scale,1));line-height:1.5;overflow-wrap:anywhere}
+[data-rmt-home-diagnostic] textarea{box-sizing:border-box;display:block;width:100%;max-width:100%;min-width:0;height:240px;margin-bottom:14px;padding:8px;font-size:calc(12px*var(--rmt-font-scale,1));line-height:1.5;resize:vertical;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text;touch-action:auto;color:inherit;background:inherit}
 `;
     const heading = document.createElement('summary'); heading.textContent = '故障排查';
     const body = document.createElement('div'); body.className = 'rmt-home-diagnostic-body';

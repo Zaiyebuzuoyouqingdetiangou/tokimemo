@@ -16,34 +16,34 @@ ${root} .rmt-travel-index nav button>span{min-width:0;display:grid;gap:4px}
 ${root} .rmt-travel-index nav :is(b,small){white-space:normal;overflow-wrap:anywhere;line-height:1.5}
 ${root} .rmt-phone-detail{padding:12px!important;min-width:0}
 ${root} .rmt-phone-detail-toolbar{margin-bottom:16px;gap:10px;align-items:center}
-${root} .rmt-phone-detail-toolbar .rmt-btn{min-height:44px;font-size:13px;flex-shrink:0}
-${root} .rmt-phone-detail-toolbar>span{font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+${root} .rmt-phone-detail-toolbar .rmt-btn{min-height:44px;font-size:calc(13px*var(--rmt-font-scale,1));flex-shrink:0}
+${root} .rmt-phone-detail-toolbar>span{font-size:calc(12px*var(--rmt-font-scale,1));line-height:1.6;overflow-wrap:anywhere}
 ${root} .rmt-phone-detail article,${root} .rmt-phone-conversation{min-width:0;overflow-wrap:anywhere}
-${root} .rmt-phone-detail h3{font-size:20px;line-height:1.5;margin:12px 0;font-weight:650}
-${root} .rmt-phone-detail .rmt-phone-record-copy{font-size:16px;line-height:1.9;white-space:pre-wrap;font-weight:400;margin:16px 0}
+${root} .rmt-phone-detail h3{font-size:calc(20px*var(--rmt-font-scale,1));line-height:1.5;margin:12px 0;font-weight:650}
+${root} .rmt-phone-detail .rmt-phone-record-copy{font-size:calc(16px*var(--rmt-font-scale,1));line-height:1.9;white-space:pre-wrap;font-weight:400;margin:16px 0}
 ${root} .rmt-phone-record-mark{display:inline-flex}
-${root} .rmt-phone-record-mark .rmt-phone-icon{width:36px;height:36px;font-size:18px;border-radius:10px}
+${root} .rmt-phone-record-mark .rmt-phone-icon{width:36px;height:36px;font-size:calc(18px*var(--rmt-font-scale,1));border-radius:10px}
 ${root} .rmt-phone-fields{display:grid;gap:0;margin:16px 0;border-top:1px solid var(--rmt-screen-muted);border-bottom:1px solid var(--rmt-screen-muted)}
 ${root} .rmt-phone-fields>div{display:grid;grid-template-columns:minmax(65px,.7fr) minmax(0,1fr);gap:14px;padding:12px 4px;border:0;border-bottom:1px dashed color-mix(in srgb,var(--rmt-screen-muted) 30%,transparent);border-radius:0;background:transparent}
 ${root} .rmt-phone-fields>div:last-child{border-bottom:0}
-${root} .rmt-phone-fields dt{font-size:13px;line-height:1.7}
-${root} .rmt-phone-fields dd{margin:0;font-size:15px;line-height:1.7;overflow-wrap:anywhere}
+${root} .rmt-phone-fields dt{font-size:calc(13px*var(--rmt-font-scale,1));line-height:1.7}
+${root} .rmt-phone-fields dd{margin:0;font-size:calc(15px*var(--rmt-font-scale,1));line-height:1.7;overflow-wrap:anywhere}
 ${root} .rmt-phone-ledger{padding:20px 14px;border:1px dashed var(--rmt-screen-muted);border-radius:3px}
 ${root} .rmt-phone-ledger>header{text-align:center;display:grid;justify-items:center;gap:6px;padding-bottom:8px}
-${root} .rmt-phone-ledger>header small{font-size:12px;letter-spacing:.14em}
+${root} .rmt-phone-ledger>header small{font-size:calc(12px*var(--rmt-font-scale,1));letter-spacing:.14em}
 ${root} .rmt-phone-ledger .rmt-phone-fields dd{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
 ${root} .rmt-phone-ledger-memo{border-top:3px double var(--rmt-screen-muted);margin-top:16px}
 ${root} .rmt-phone-notepaper{padding:16px 16px 28px;border-top:4px solid var(--rmt-screen-muted);background:repeating-linear-gradient(transparent 0 30px,color-mix(in srgb,var(--rmt-screen-muted) 14%,transparent) 30px 31px);min-height:260px}
 ${root} .rmt-phone-notepaper .rmt-phone-record-copy{line-height:31px}
 ${root} .rmt-phone-feed-post>header{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid color-mix(in srgb,var(--rmt-screen-muted) 30%,transparent)}
-${root} .rmt-phone-contact-avatar{display:grid;place-items:center;width:52px;height:52px;flex-shrink:0;background:color-mix(in srgb,var(--rmt-screen-muted) 18%,var(--rmt-screen-bg));color:var(--rmt-screen-ink);border-radius:50%;font-size:24px}
+${root} .rmt-phone-contact-avatar{display:grid;place-items:center;width:52px;height:52px;flex-shrink:0;background:color-mix(in srgb,var(--rmt-screen-muted) 18%,var(--rmt-screen-bg));color:var(--rmt-screen-ink);border-radius:50%;font-size:calc(24px*var(--rmt-font-scale,1))}
 ${root} .rmt-phone-contact-card>header{display:grid;justify-items:center;gap:12px;padding:24px 0;border-bottom:1px solid var(--rmt-screen-muted)}
-${root} .rmt-phone-contact-card>header .rmt-phone-contact-avatar{width:80px;height:80px;font-size:32px}
+${root} .rmt-phone-contact-card>header .rmt-phone-contact-avatar{width:80px;height:80px;font-size:calc(32px*var(--rmt-font-scale,1))}
 ${root} .rmt-phone-track-card{padding:18px 8px;text-align:center}
-${root} .rmt-phone-record-art{display:grid;place-items:center;margin:0 auto 24px;width:min(200px,80%);aspect-ratio:1;border-radius:50%;border:22px double var(--rmt-screen-muted);box-shadow:inset 0 0 0 12px var(--rmt-screen-bg);font-size:38px}
+${root} .rmt-phone-record-art{display:grid;place-items:center;margin:0 auto 24px;width:min(200px,80%);aspect-ratio:1;border-radius:50%;border:22px double var(--rmt-screen-muted);box-shadow:inset 0 0 0 12px var(--rmt-screen-bg);font-size:calc(38px*var(--rmt-font-scale,1))}
 ${root} .rmt-phone-track-card .rmt-phone-record-copy{text-align:left}
 ${root} .rmt-phone-photo-record figure{margin:0;padding:24px 16px;border:1px solid var(--rmt-screen-muted);border-radius:10px;background:color-mix(in srgb,var(--rmt-screen-muted) 8%,var(--rmt-screen-bg));text-align:center}
-${root} .rmt-phone-photo-record figure>i{font-size:32px;margin:8px 0 20px}
+${root} .rmt-phone-photo-record figure>i{font-size:calc(32px*var(--rmt-font-scale,1));margin:8px 0 20px}
 ${root} .rmt-phone-book-page{padding:20px 18px;border-left:7px double var(--rmt-screen-muted);font-family:Georgia,'Songti SC',serif}
 ${root} .rmt-phone-book-page>header{border-bottom:1px solid var(--rmt-screen-muted);padding-bottom:18px}
 ${root} .rmt-phone-document>header,${root} .rmt-phone-record>header{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--rmt-screen-muted);padding-bottom:12px}
@@ -57,7 +57,7 @@ ${root} .rmt-phone-conversation>header{position:static;text-align:center;padding
 ${root} .rmt-phone-conversation .rmt-phone-chat-thread{gap:16px}
 ${root} .rmt-phone-conversation .rmt-phone-message{max-width:88%;padding:12px;border-radius:16px 16px 16px 4px}
 ${root} .rmt-phone-conversation .rmt-phone-message-owner{align-self:flex-end;margin-left:auto;border-radius:16px 16px 4px 16px;background:color-mix(in srgb,var(--rmt-screen-muted) 15%,var(--rmt-screen-bg))}
-${root} .rmt-phone-conversation .rmt-phone-message p{font-size:16px!important}
+${root} .rmt-phone-conversation .rmt-phone-message p{font-size:calc(16px*var(--rmt-font-scale,1))!important}
 @media(max-width:480px){${root} .rmt-travel-index nav{max-height:280px;grid-template-columns:1fr}${root} .rmt-phone-ledger{padding:16px 12px}${root} .rmt-phone-detail-toolbar{flex-wrap:wrap}}
 `;
 }

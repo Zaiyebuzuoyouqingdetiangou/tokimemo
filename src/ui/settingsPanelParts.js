@@ -331,6 +331,9 @@ export function refreshThemeUi() {
     if (custom) custom.hidden = settings.themeMode !== 'custom';
     const opacity = panel?.querySelector('[data-rmt-theme-opacity]');
     if (opacity) opacity.textContent = Math.round(settings.themeAlpha * 100) + '%';
+    const fontScaleValue = panel?.querySelector('[data-rmt-font-scale-value]');
+    if (fontScaleValue) fontScaleValue.textContent = Math.round(settings.fontScale * 100) + '%';
+    core_theme.applyFontScale(settings);
 }
 
 async function onAutoMemoryPaceChange(panel, event) {
@@ -518,6 +521,10 @@ export function refreshGenerationSettingsUi() {
     if (autoWarning) autoWarning.textContent = core_autoUpdates.autoUpdateAvailability();
     core_autoUpdates.refreshAutoUpdateStatus();
     if (themeAlpha) themeAlpha.value = String(settings.themeAlpha);
+    const fontScale = panel.querySelector('[data-rmt-font-scale]');
+    if (fontScale) fontScale.value = String(settings.fontScale);
+    const fontScaleValue = panel.querySelector('[data-rmt-font-scale-value]');
+    if (fontScaleValue) fontScaleValue.textContent = Math.round(settings.fontScale * 100) + '%';
     if (themeCustomPanel) themeCustomPanel.hidden = settings.themeMode !== 'custom';
     for (const input of panel.querySelectorAll('[data-rmt-theme-color]')) {
         const key = input.dataset.rmtThemeColor;

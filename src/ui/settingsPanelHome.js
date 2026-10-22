@@ -379,6 +379,10 @@ export function mountSettings({ homeTarget = null } = {}) {
       });
       refreshThemeUi();
     }
+    if (event.target.matches?.('[data-rmt-font-scale]')) {
+      core_settings.updatePluginSettings({ fontScale: core_theme.normalizeFontScale(event.target.value) });
+      refreshThemeUi();
+    }
   });
   if (
     bindSettingsClick(
@@ -690,6 +694,11 @@ function bindSettingsChange(panel, tagDraft, tagStatus, tagState) {
     }
     if (target.matches?.('[data-rmt-theme-alpha]')) {
       core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(target.value) || 0.96)) });
+      refreshThemeUi();
+      return;
+    }
+    if (target.matches?.('[data-rmt-font-scale]')) {
+      core_settings.updatePluginSettings({ fontScale: core_theme.normalizeFontScale(target.value) });
       refreshThemeUi();
       return;
     }

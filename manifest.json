@@ -1,7 +1,7 @@
 {
     "display_name": "心迹回廊",
     "loading_order": 110,
-    "js": "index.js?heartbeat=1.0.58-r8-koori&layout=8",
+    "js": "index.js?heartbeat=1.0.58-r9-koori&layout=8",
     "author": "Toto",
     "version": "1.0.58",
     "auto_update": true,

@@ -63,11 +63,11 @@ export function mountMirrorCall(overlay, target = null) {
       <div class="rmt-call-controls"><button type="button" data-call="send">发送</button><button type="button" data-call="record">开始说话</button>
       <button type="button" data-call="finish">说完了</button><button type="button" data-call="resume">继续播放</button><button type="button" data-call="interrupt">打断 TA</button><button type="button" data-call="download">保存通话文字</button></div>
       <small>使用镜译实时通话测试版的连接与音色。点击连接不会自动扣费或开麦；发送后才调用模型和语音服务。背景含角色资料、当前聊天记录与现有记忆摘要。本次通话不写入主聊天；关闭前可保存文字。切页、切聊或关闭会停止通话。</small>
-      <style>.rmt-live-call{flex:0 0 auto;min-width:0;padding:6px 16px;border-bottom:1px solid var(--rmt-theme-border,#cbd5e1);font-size:14px;color:var(--rmt-theme-text,#344454);background:var(--rmt-theme-bg,#fff)}
+      <style>.rmt-live-call{flex:0 0 auto;min-width:0;padding:6px 16px;border-bottom:1px solid var(--rmt-theme-border,#cbd5e1);font-size:calc(14px*var(--rmt-font-scale,1));color:var(--rmt-theme-text,#344454);background:var(--rmt-theme-bg,#fff)}
       .rmt-live-call[open]{max-height:none;overflow:visible}.rmt-live-call>summary{display:none}.rmt-live-call summary{min-height:44px;align-content:center;cursor:pointer;font-weight:600}
       .rmt-call-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.rmt-call-controls label{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%}
       .rmt-live-call :is(button,select,textarea){font:inherit!important;color:inherit!important;background:var(--rmt-theme-surface-solid,#fff)!important;border:1px solid var(--rmt-theme-border,#cbd5e1)!important;border-radius:10px;min-height:44px;height:auto!important;max-width:100%;padding:8px!important;white-space:normal;box-sizing:border-box}
-      .rmt-call-controls select{min-width:0;flex:1}.rmt-call-input{display:block;margin:8px 0}.rmt-live-call textarea{display:block;width:100%;font-size:16px!important}.rmt-live-call small{display:block;line-height:1.6;margin-top:8px}
+      .rmt-call-controls select{min-width:0;flex:1}.rmt-call-input{display:block;margin:8px 0}.rmt-live-call textarea{display:block;width:100%;font-size:calc(16px*var(--rmt-font-scale,1))!important}.rmt-live-call small{display:block;line-height:1.6;margin-top:8px}
       .rmt-call-transcript p{white-space:pre-wrap;overflow-wrap:anywhere;padding:8px 10px;border-left:2px solid var(--rmt-theme-border,#cbd5e1);margin:8px 0;line-height:1.7}
       .rmt-live-call button:disabled{opacity:.5}.rmt-live-call :focus-visible{outline:2px solid currentColor;outline-offset:2px}.rmt-live-call [role=status]{overflow-wrap:anywhere}</style>`;
     bar.open = true; body.append(bar);

@@ -965,6 +965,7 @@ export function startAutoMemoryShell() {
     const previous = cleanup;
     cleanup = () => { previous?.(); removeToggle(); };
     timer = setInterval(fallbackTick, 2000);
+    try { core_theme.applyFontScale(pluginSettings()); } catch { /* 取不到设置时用默认字号。 */ }
     sync();
 }
 
