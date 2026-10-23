@@ -16,7 +16,7 @@ const esc = text.esc;
 const paragraphs = value => String(value || '').split(/\n+/u).filter(Boolean).map(part => `<p>${esc(part)}</p>`).join('');
 const readOnly = () => !!runtimeState.activeArchiveSnapshot && (runtimeState.activeArchiveReadOnly || runtimeState.activeArchiveSnapshot.backupOnly === true);
 const button = (action, label, id = '', extra = '') => `<button type="button" class="rmt-btn" data-rmt-time-story="${action}" data-rmt-time-story-id="${esc(id)}" ${extra}>${esc(label)}</button>`;
-const nameFor = (session, role) => role === 'char' ? session.characterName : session.userName;
+const nameFor = (session, role) => role === 'char' ? participants.compactCastLabel(session.characterName) : session.userName;
 const presentation = value => ['modern', 'classical', 'fantasy', 'scifi', 'neutral'].includes(value) ? value : 'neutral';
 const palette = value => ['rose', 'blue', 'moss', 'gold', 'plum', 'slate'].includes(value) ? value : 'slate';
 const mediumIcon = value => ({ phone: 'fa-phone', terminal: 'fa-satellite-dish', relic: 'fa-gem', object: 'fa-hourglass-half', voice: 'fa-wave-square' })[value] || 'fa-wave-square';

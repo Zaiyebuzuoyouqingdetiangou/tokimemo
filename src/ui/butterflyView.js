@@ -7,6 +7,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
+import * as core_participants from '../core/participants.js';
 import * as ui_overlay from './overlay.js';
 
 export function renderButterfly() {
@@ -23,7 +24,7 @@ export function renderButterfly() {
     const branchNodes = branches.map((node, index) => `<button type="button" class="rmt-node rmt-branch-node ${index + 1 === session.selected ? 'active' : ''}" data-rmt-node="${index + 1}"><span>${String(index + 1).padStart(2, '0')}</span>${core_text.esc(node.label)}</button>`).join('');
     const endingIndex = session.nodes.length - 1;
     const isOmega = !!selected.trueEnding;
-    const observerName = core_text.esc(session.subject || runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2 || '{{char}}');
+    const observerName = core_text.esc(core_participants.compactCastLabel(session.subject) || runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2 || '{{char}}');
     const observationPanel = isOmega
         ? `<section class="rmt-terminal-block rmt-observation-screen rmt-omega-screen">
             <div class="rmt-terminal-section-title">III. OBSERVATION POINT Ω // 现世终局观测</div>

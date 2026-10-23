@@ -190,6 +190,13 @@ export function resolveStoryIdentities(memoryBank = null, context = null, people
     return { cardName, userDisplay, userAliases, ownerNames, peopleNames: uniqueNames([...ownerNames, ...archivePeopleNames(memoryBank)]), compatNote };
 }
 
+// 多人卡的人物名单可能有几十人。页面上只显示前几个，后面写「等 N 人」，不把整份名单平铺出来。
+export function compactCastLabel(value, max = 3) {
+    const label = typeof value === 'string' ? value : '';
+    const parts = label.split('、').filter(Boolean);
+    return parts.length > max ? `${parts.slice(0, max).join('、')} 等 ${parts.length} 人` : label;
+}
+
 // 番外、前世等页面会把生成时的人物名存进记录。「本页人物」只选了名单里的一部分时，
 // 存下的是这部分人的名字；读回时也要认，不然换了人物以后旧记录就读不出来。
 export function storyOwnerLabelAllowed(value, memoryBank = null) {
