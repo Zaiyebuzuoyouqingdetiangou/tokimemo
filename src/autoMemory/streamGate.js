@@ -1,9 +1,13 @@
 // 流式生成的开始和结束由本页自己记住。不能只看宿主有没有暴露 generating。
 
 let latched = false;
+let idleSince = 0;
+// 「开始」之后宿主一直没有任何在生成的迹象，就不再当作在生成：漏掉的「结束」事件不会让页面一直卡着。
+const LATCH_IDLE_MS = 20000;
 
 export function noteAssistantStream(open) {
     latched = open === true;
+    idleSince = 0;
 }
 
 export function assistantStreamLatched() {
@@ -24,7 +28,7 @@ export function stopButtonOpen(stop, computedDisplay = '') {
 export function hostGenerationOpen(context) {
     if (globalThis.document?.body?.dataset?.generating === 'true') return true;
     const stream = context?.streamingProcessor;
-    if (stream && stream.finished !== true && stream.isStopped !== true) return true;
+    if (stream && stream.finished !== true && stream.isFinished !== true && stream.isStopped !== true) return true;
     if (context?.generating === true || context?.isGenerating === true) return true;
     const stop = globalThis.document?.getElementById?.('mes_stop');
     let computed = '';
@@ -34,7 +38,15 @@ export function hostGenerationOpen(context) {
     return !!live;
 }
 
-export function generationOpen(context) {
-    if (latched) return true;
-    return hostGenerationOpen(context);
+export function generationOpen(context, now = Date.now()) {
+    const host = hostGenerationOpen(context);
+    if (!latched || host) {
+        idleSince = 0;
+        return latched || host;
+    }
+    if (!idleSince) idleSince = now;
+    if (now - idleSince < LATCH_IDLE_MS) return true;
+    latched = false;
+    idleSince = 0;
+    return false;
 }

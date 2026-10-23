@@ -1227,7 +1227,10 @@ export function startAutoMemoryScheduler() {
         types.CHAT_LOADED,
     ].filter(Boolean))];
     const listener = (type, ...args) => {
-        const starting = type === types.GENERATION_STARTED || type === types.STREAM_TOKEN_RECEIVED || type === types.STREAM_TOKEN_RECEIVED_FULLY;
+        // 酒馆和别的插件会用 dryRun 只拼一遍提示词（数字数、预览），它发「开始」但永远不发「结束」。
+        // 以前把它也当成正在生成，楼层信封和自动留忆会一直等下去，直到下一次真的生成结束。
+        const dryRun = type === types.GENERATION_STARTED && args[2] === true;
+        const starting = !dryRun && (type === types.GENERATION_STARTED || type === types.STREAM_TOKEN_RECEIVED || type === types.STREAM_TOKEN_RECEIVED_FULLY);
         const ended = type === types.GENERATION_ENDED || type === types.GENERATION_STOPPED;
         if (type === types.CHAT_CHANGED || type === types.CHAT_LOADED) {
             auto_memory_round.cancelAutoMemoryRounds();
