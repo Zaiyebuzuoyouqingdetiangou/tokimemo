@@ -23,9 +23,7 @@ const readonly = () => !!runtimeState.activeArchiveSnapshot && (runtimeState.act
 const paragraphs = value => String(value || '').split(/\n{2,}/u).filter(Boolean).map(part => `<p>${esc(part)}</p>`).join('');
 const clueLabel = kind => ({ object: '物证', testimony: '证词', missing: '缺页', note: '旁记' })[kind] || '线索';
 const button = (action, label, id = '', extra = '') => `<button type="button" class="rmt-btn" data-rmt-past-lives="${action}" data-rmt-past-lives-id="${esc(id)}" ${extra}>${esc(label)}</button>`;
-const savedCharacterNameMatches = (value, memory) => [
-    participants.resolveStoryIdentities(memory).ownerNames.join('、'), memory?.characterName,
-].includes(value);
+const savedCharacterNameMatches = (value, memory) => participants.storyOwnerLabelAllowed(value, memory);
 
 export function pastLivesHtml(value, { readOnly = false, busy = false, notice = '', imageCache = null, cardReadOnly = readOnly } = {}) {
     try {

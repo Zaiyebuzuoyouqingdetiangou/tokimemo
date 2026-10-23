@@ -609,7 +609,7 @@ function cleanedHistory(items) {
     }).slice(-core_constants.MAX_DERIVED_CONTENT_ITEMS);
 }
 
-export function mergeButterflyIncremental(previous, part, sourceMemoryIds) {
+export function mergeButterflyIncremental(previous, part, sourceMemoryIds, subject = '') {
     const { main, previousBranches, previousOmega, legacyHistory } = butterflyMergeBase(previous);
     const baseHistory = cleanedHistory([
         ...(Array.isArray(previous?.omegaHistory) ? previous.omegaHistory : []),
@@ -618,6 +618,8 @@ export function mergeButterflyIncremental(previous, part, sourceMemoryIds) {
     const baseNodes = [main, ...previousBranches, previousOmega];
     const sanitizedBase = {
         ...structuredClone(previous),
+        // 「本页人物」改了之后再更新，标题里的人物跟着这次的选择走，不沿用第一次生成时的整份名单。
+        ...(subject ? { subject } : {}),
         nodes: baseNodes,
         omegaHistory: baseHistory,
         selected: Math.max(1, baseNodes.length - 1),
@@ -690,7 +692,7 @@ export async function generateButterflyIncrementalWithRepair(context, memoryBank
     const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const { previousBranches } = butterflyMergeBase(previous);
     if (previousBranches.length + 2 >= core_constants.MAX_DERIVED_CONTENT_ITEMS) {
-        const sanitized = mergeButterflyIncremental(previous, { branches: [], omega: previous.nodes?.[previous.nodes.length - 1] }, sourceMemoryIds);
+        const sanitized = mergeButterflyIncremental(previous, { branches: [], omega: previous.nodes?.[previous.nodes.length - 1] }, sourceMemoryIds, butterflySubjectName(memoryBank, context));
         return core_incremental.stampIncrementalCoverage(sanitized, previous, memoryBank, 'mode', sourceMemoryIds, 0);
     }
     const savedIncrement = generation_recovery.generationRecoverySegmentsForOrigin(origin)?.find(segment => /:increment$/u.test(segment.slot));
@@ -704,7 +706,7 @@ export async function generateButterflyIncrementalWithRepair(context, memoryBank
             ], legacyTemperatures: [0.55] } } : {}) },
         raw => normalizeButterflyIncrementPart(raw, memoryBank, context),
     );
-    const merged = mergeButterflyIncremental(previous, part, sourceMemoryIds);
+    const merged = mergeButterflyIncremental(previous, part, sourceMemoryIds, butterflySubjectName(memoryBank, context));
     return settleButterflyProse(
         core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, Math.max(0, merged.nodes.length - previous.nodes.length)),
         context, memoryBank, origin, taskKey, {},

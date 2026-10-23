@@ -21,9 +21,7 @@ const presentation = value => ['modern', 'classical', 'fantasy', 'scifi', 'neutr
 const palette = value => ['rose', 'blue', 'moss', 'gold', 'plum', 'slate'].includes(value) ? value : 'slate';
 const mediumIcon = value => ({ phone: 'fa-phone', terminal: 'fa-satellite-dish', relic: 'fa-gem', object: 'fa-hourglass-half', voice: 'fa-wave-square' })[value] || 'fa-wave-square';
 const connectLabel = value => ({ phone: '接通', terminal: '接入通讯', relic: '回应回响', object: '倾听回响', voice: '循声回应' })[value] || '倾听回响';
-const savedCharacterNameMatches = (value, memory) => [
-    participants.resolveStoryIdentities(memory).ownerNames.join('、'), memory?.characterName,
-].includes(value);
+const savedCharacterNameMatches = (value, memory) => participants.storyOwnerLabelAllowed(value, memory);
 
 function echoHtml(session, episode, ui) {
     const ends = episode.ends || [];

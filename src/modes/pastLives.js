@@ -192,7 +192,7 @@ export function normalizePastLives(value, memory, options = {}) {
         throw fail('SOURCE', '番外所属聊天或档案版本不一致，原记录保持不变。');
     const result = emptyPastLives(memory, options.context);
     // Re-normalizing an older readable volume must not rewrite its saved reading label.
-    if ([ownerLabel(memory), memory?.characterName].includes(raw.characterName)) result.characterName = raw.characterName;
+    if (participants.storyOwnerLabelAllowed(raw.characterName, memory)) result.characterName = raw.characterName;
     result.ownerKey = result.ownerKey || clean(raw.ownerKey, 1200);
     result.presentation = ['classical', 'modern', 'fantasy', 'neutral'].includes(raw.presentation) ? raw.presentation : 'neutral';
     result.episodes = list(raw.episodes, L.episodes).map((episode, index) => normalizePastLivesEpisode(episode, memory,
@@ -207,7 +207,7 @@ export function readablePastLivesSession(value, memory) {
     try {
         const raw = contract.pastLivesStoredData(value);
         if (raw.chatId !== memory?.chatId || raw.archiveRevision !== memory?.archiveRevision
-            || ![ownerLabel(memory), memory?.characterName].includes(raw.characterName) || raw.userName !== memory?.userName) return null;
+            || !participants.storyOwnerLabelAllowed(raw.characterName, memory) || raw.userName !== memory?.userName) return null;
         return value;
     } catch { return null; }
 }
@@ -290,7 +290,7 @@ export function readablePastLivesProgressSession(value, memory) {
         if (raw.readableProgress?.version !== 1 || raw.readableProgress.complete !== false
             || raw.kind !== PAST_LIVES_MODE || raw.version !== PAST_LIVES_VERSION
             || raw.chatId !== memory?.chatId || raw.archiveRevision !== memory?.archiveRevision
-            || ![ownerLabel(memory), memory?.characterName].includes(raw.characterName) || raw.userName !== memory?.userName
+            || !participants.storyOwnerLabelAllowed(raw.characterName, memory) || raw.userName !== memory?.userName
             || !Array.isArray(raw.episodes) || !raw.episodes.length) return null;
         for (const episode of raw.episodes) {
             if (!/^PL\d+$/u.test(episode.id) || episode.fiction !== true || !Array.isArray(episode.dossiers)
