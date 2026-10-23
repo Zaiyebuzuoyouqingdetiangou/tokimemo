@@ -225,8 +225,12 @@ export function parseRevealRecord(value) {
     };
 }
 
-function parseList(value, parseItem, max) {
-    if (!Array.isArray(value) || value.length > max) throw corrupt();
+function parseList(value, parseItem) {
+    // Tickets and reveals are persistent history, not one response batch. Their
+    // references must survive long chats; a count cap or truncation here would
+    // either stop the next draw or detach existing letters and achievements.
+    // Keep every record's schema and unique identity checks below.
+    if (!Array.isArray(value)) throw corrupt();
     const rows = value.map(parseItem);
     const ids = new Set(rows.map(item => item.id));
     if (ids.size !== rows.length) throw corrupt();
@@ -236,13 +240,13 @@ function parseList(value, parseItem, max) {
 export function parseAutoMemorySnapshot(value) {
     exactKeys(value, SNAPSHOT_KEYS);
     const plan = parseAutoMemoryPlan(value.plan);
-    const drawTickets = parseList(value.drawTickets, parseDrawTicket, 40);
+    const drawTickets = parseList(value.drawTickets, parseDrawTicket);
     if (plan.activeDrawTicketId && !drawTickets.some(item => item.id === plan.activeDrawTicketId)) throw corrupt();
     const modulePlan = value.modulePlan === null ? null : parseModulePlan(value.modulePlan);
     if (modulePlan && plan.activeDrawTicketId && modulePlan.drawId !== plan.activeDrawTicketId) throw corrupt();
     return {
         plan,
-        revealRecords: parseList(value.revealRecords, parseRevealRecord, 200),
+        revealRecords: parseList(value.revealRecords, parseRevealRecord),
         drawTickets,
         modulePlan,
     };
@@ -349,7 +353,17 @@ export function assignAutoMemoryMetadata(chatMetadata, snapshot) {
     chatMetadata[AUTO_MEMORY_REVEAL_KEY] = parsed.revealRecords;
     chatMetadata[AUTO_MEMORY_DRAW_TICKETS_KEY] = parsed.drawTickets;
     chatMetadata[AUTO_MEMORY_MODULE_PLAN_KEY] = parsed.modulePlan;
+    if (!parsed.plan.enabled) {
+        for (const listener of disabledListeners) listener(chatMetadata);
+    }
     return parsed;
+}
+
+const disabledListeners = new Set();
+
+export function onAutoMemoryDisabled(listener) {
+    disabledListeners.add(listener);
+    return () => disabledListeners.delete(listener);
 }
 
 export function commitAutoMemoryMetadata(chatMetadata, snapshot, expectedRevision) {
@@ -403,15 +417,16 @@ export async function readAutoMemoryRecovery(chatId) {
     return parseAutoMemoryRecoveryRecord(stored);
 }
 
-export async function writeAutoMemoryRecovery(chatId, snapshot, expectedRevision) {
+export async function writeAutoMemoryRecovery(chatId, snapshot, expectedRevision, options = {}) {
+    options.assertCurrent?.();
     if (!autoMemoryRecoveryAvailable()) throw recoveryUnavailable();
     const parsed = parseAutoMemorySnapshot(snapshot);
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || parsed.plan.revision !== expectedRevision + 1) throw stale();
     const record = parseAutoMemoryRecoveryRecord({
         key: recoveryKey(chatId), schemaVersion: 1, chatId, revision: parsed.plan.revision, payload: parsed,
     });
-    if (testBackend) return parseAutoMemoryRecoveryRecord(await testBackend.write(record.key, expectedRevision, record));
-    return parseAutoMemoryRecoveryRecord(await idbWrite(record.key, expectedRevision, record));
+    if (testBackend) return parseAutoMemoryRecoveryRecord(await testBackend.write(record.key, expectedRevision, record, options));
+    return parseAutoMemoryRecoveryRecord(await idbWrite(record.key, expectedRevision, record, options));
 }
 
 async function idbRead(key) {
@@ -456,24 +471,38 @@ export async function compareAutoMemoryRecord(key, decide) {
     } finally { db.close(); }
 }
 
-async function idbWrite(key, expectedRevision, record) {
+async function idbWrite(key, expectedRevision, record, options = {}) {
     const db = await database();
     try {
+        options.assertCurrent?.();
         return await new Promise((resolve, reject) => {
             const tx = db.transaction(STORE, 'readwrite');
-            let mismatch = false;
-            const timer = setTimeout(() => { try { tx.abort(); } catch { /* already closed */ } reject(recoveryUnavailable()); }, 5000);
+            let failure = null;
+            const cancel = () => {
+                failure = options.signal?.reason || recoveryUnavailable();
+                try { tx.abort(); } catch { /* already closed */ }
+            };
+            const timer = setTimeout(() => { failure = recoveryUnavailable(); cancel(); }, 5000);
+            const cleanup = () => {
+                clearTimeout(timer);
+                options.signal?.removeEventListener?.('abort', cancel);
+            };
+            options.signal?.addEventListener?.('abort', cancel, { once: true });
             const store = tx.objectStore(STORE);
             const request = store.get(key);
             request.onsuccess = () => {
-                if ((request.result?.revision || 0) !== expectedRevision) { mismatch = true; tx.abort(); return; }
-                store.put(record);
+                try {
+                    options.assertCurrent?.();
+                    if ((request.result?.revision || 0) !== expectedRevision) throw stale('自动留忆备份版本已变化，没有覆盖较新的记录。');
+                    store.put(record);
+                } catch (error) {
+                    failure = error;
+                    tx.abort();
+                }
             };
-            tx.oncomplete = () => { clearTimeout(timer); resolve(record); };
-            tx.onabort = tx.onerror = () => {
-                clearTimeout(timer);
-                reject(mismatch ? stale('自动留忆备份版本已变化，没有覆盖较新的记录。') : recoveryUnavailable());
-            };
+            tx.oncomplete = () => { cleanup(); resolve(record); };
+            tx.onabort = tx.onerror = () => { cleanup(); reject(failure || recoveryUnavailable()); };
+            if (options.signal?.aborted) cancel();
         });
     } finally { db.close(); }
 }

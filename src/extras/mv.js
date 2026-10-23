@@ -177,6 +177,9 @@ function targetContext(target) {
     } catch { return null; }
 }
 
+// Audio import validates the same immutable song target without patching a record.
+export function isCurrentMvTarget(target) { return !!targetContext(target); }
+
 function resultBasis(record, kind, shotId) {
     if (kind === 'frameEdit') return JSON.stringify({ storyRevision: record?.storyRevision,
         shot: list(record?.shots).find(shot => shot.id === shotId) || null });

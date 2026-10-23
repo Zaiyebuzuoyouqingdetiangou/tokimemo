@@ -1,9 +1,10 @@
 // 朋友情报：从人际庭园的人物出发，请 TA 用自己的口吻讲“他提起你的样子”。
-// 事实只认档案；编号对不上档案时不报错，改标为“生活设定”。温度等生成参数完全沿用用户设置。
+// 共同往事须有当前档案的编号与可见原文锚点；普通观察与建议无需历史证据。
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
+import * as narrative_authority from '../core/narrativeAuthority.js';
 import * as core_text from '../core/text.js';
 import * as archive_repository from '../archive/repository.js';
 import * as generation_client from '../generation/client.js';
@@ -71,8 +72,8 @@ ${generation_prompts.promptArchiveSlice(memory, 56)}
 
 【写作要求】
 1. sections 依次写三段：mention（${charName} 提起 ${userName} 的样子）、seen（${person.name} 亲眼看到的 ${charName}）、advice（${person.name} 给 ${userName} 的悄悄话）。
-2. mention 与 seen 里说到的过去之事，必须来自上方档案，并在 sourceMemoryIds 填对应编号；${person.name} 没亲历、档案也没写的事，就让 TA 说“这个我就不清楚了”，不要编造。
-3. advice 是建议，不是事实，sourceMemoryIds 留空数组。
+2. 说到已发生的共同往事时，必须来自上方档案：sourceMemoryIds 填对应编号，sourceMemoryAnchor 原样填写该记忆的 title 或一条完整 anchor，并把这段原文自然保留在 text 中。不能拿真实编号或无关锚点为新编往事作证；${person.name} 没亲历、档案也没写的事，就让 TA 说“这个我就不清楚了”。当下观察与未来设想不是共同往事，无需引用。
+3. advice 写建议，不补造过去的事实；没有引用往事时 sourceMemoryIds 留空数组、sourceMemoryAnchor 留空字符串。
 4. 每段 2～5 句，口语化，符合 ${person.name} 的身份、时代和世界观；不要替 ${userName} 做决定或说话。
 5. scene 写这次打听发生的时间地点，一句话，符合世界观。
 
@@ -80,27 +81,103 @@ ${generation_prompts.promptArchiveSlice(memory, 56)}
 只输出一个 JSON 对象。
 第一个字符必须是 {，最后一个字符必须是 }。
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
-{"scene":"时间地点","sections":[{"kind":"mention","text":"……","sourceMemoryIds":["M001"]},{"kind":"seen","text":"……","sourceMemoryIds":["M002"]},{"kind":"advice","text":"……","sourceMemoryIds":[]}]}`;
+{"scene":"时间地点","sections":[{"kind":"mention","text":"……","sourceMemoryIds":[],"sourceMemoryAnchor":""},{"kind":"seen","text":"……","sourceMemoryIds":[],"sourceMemoryAnchor":""},{"kind":"advice","text":"……","sourceMemoryIds":[],"sourceMemoryAnchor":""}]}`;
+}
+
+function intelClaimsSharedHistory(text, memory) {
+    // Keep the shared detector's tense/participant rules for this feature too.
+    // Proposal/engagement wording denotes the same relationship-episode boundary
+    // as marriage, but is not in its general-purpose action vocabulary.
+    return narrative_authority.narrativeClaimsSharedHistory(text.replace(/求婚|订婚/gu, '结婚'), {
+        userName: memory?.userName || '',
+    });
+}
+
+function intelHasUnboundHistory(text, reference, memory) {
+    const marker = '\u0000'; // normalizeText has already removed input NULs.
+    const terms = core_evidence.memoryEvidenceTerms(memory, reference.sourceMemoryIds)
+        .sort((left, right) => right.length - left.length);
+    let remaining = text;
+    for (const term of terms) {
+        const pattern = [...term.replace(/\s+/gu, '')]
+            .map(char => char.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('\\s*');
+        remaining = remaining.replace(new RegExp(pattern, 'giu'), marker);
+    }
+    // Check only claims left after the cited memories' literal evidence. This is
+    // a bounded language guard, not a semantic proof of the whole paragraph.
+    // A date immediately attached to the removed evidence is its recall frame,
+    // not another event ("remember you [anchor] that day"). Keep the participant
+    // words so an omitted subject after a comma still refers to the same people.
+    remaining = remaining.replace(/\u0000(?:的)?(?:那(?:天|晚|夜|次|年)|当时|往事|旧事)/gu, marker)
+        .replace(/(?:那(?:天|晚|夜|次|年)|当时)(你们|我们|咱们|两个人|双方)?\s*\u0000/gu, (_, subject = '') => subject + marker)
+        .split(marker).join(' ');
+    const userName = core_text.normalizeText(memory?.userName, 120);
+    const characterName = core_text.normalizeText(memory?.characterName, 120);
+    remaining = remaining.replace(/([，,])([^，,。！？!?；;\n]+)/gu, (whole, separator, clause) => {
+        const mentionsUser = (userName && clause.includes(userName))
+            || /你|我们|咱们|两个人|彼此|共同|一起|\b(?:you|your|yours|we|us|our|ours|together)\b/iu.test(clause);
+        const subject = clause.trim().replace(/^(?:昨天|昨日|昨晚|前天|去年|前年|上次|以前|从前|当年|那天|那晚|小时候|今天|今早|今晚)\s*/u, '');
+        const independent = /^(?:他|她|它|我|本人)/u.test(subject)
+            || (characterName && subject.startsWith(characterName));
+        // An explicit independent subject starts a new scope. Do not lend the
+        // previous "you/we" to "he went alone yesterday", but keep inheritance
+        // for "yesterday [we] also exchanged rings".
+        return independent && !mentionsUser ? `。${clause}` : whole;
+    });
+    return intelClaimsSharedHistory(remaining, memory);
+}
+
+function intelSectionEvidence(item, text, memory) {
+    const claimedIds = core_text.cleanArray(item?.sourceMemoryIds, 16, 40);
+    const claimedAnchor = core_text.normalizeText(item?.sourceMemoryAnchor, 120);
+    const reference = core_evidence.normalizeExactMemoryReference(claimedIds, claimedAnchor, memory, 1);
+    const fold = value => core_text.normalizeText(value, 1600).replace(/\s+/gu, '').toLowerCase();
+    const verified = !!reference.sourceMemoryIds.length && !!reference.sourceMemoryAnchor
+        && fold(text).includes(fold(reference.sourceMemoryAnchor))
+        && !intelHasUnboundHistory(text, reference, memory);
+    const needsEvidence = claimedIds.length > 0 || !!claimedAnchor || intelClaimsSharedHistory(text, memory);
+    return { verified, needsEvidence, reference };
 }
 
 export function normalizeIntel(data, memory, person) {
     const raw = Array.isArray(data?.sections) ? data.sections : [];
-    const sections = SECTION_KINDS.map(kind => {
-        const item = raw.find(row => core_text.normalizeText(row?.kind, 20) === kind) || null;
+    const normalizeSection = (item, kind) => {
         const text = core_text.normalizeText(item?.text, 1600);
         if (!text) return null;
-        const ids = kind === 'advice' ? [] : core_evidence.normalizeSourceMemoryIds(item?.sourceMemoryIds, memory, 0);
-        return { kind, text, sourceMemoryIds: ids };
+        const proof = intelSectionEvidence(item, text, memory);
+        if (proof.needsEvidence && !proof.verified) {
+            throw core_text.safeUserError('这段情报的往事依据未能核实，原始回复会保留供检查，不会作为已验证情报保存。', 'RMT_INTEL_EVIDENCE');
+        }
+        return { kind, text, ...(proof.verified ? proof.reference : { sourceMemoryIds: [], sourceMemoryAnchor: '' }) };
+    };
+    const sections = SECTION_KINDS.map(kind => {
+        const item = raw.find(row => core_text.normalizeText(row?.kind, 20) === kind) || null;
+        return normalizeSection(item, kind);
     }).filter(Boolean);
     // 模型没按 kind 写时，按顺序兜底，不因为格式小偏差丢掉整次结果。
     if (!sections.length) {
         raw.slice(0, 3).forEach((item, index) => {
-            const text = core_text.normalizeText(item?.text, 1600);
-            if (text) sections.push({ kind: SECTION_KINDS[index], text, sourceMemoryIds: index === 2 ? [] : core_evidence.normalizeSourceMemoryIds(item?.sourceMemoryIds, memory, 0) });
+            const section = normalizeSection(item, SECTION_KINDS[index]);
+            if (section) sections.push(section);
         });
     }
     if (!sections.length) throw core_text.safeUserError(`这次没有收到${person.name}的回答，可以再问一次。`, 'RMT_INTEL_EMPTY');
-    return { scene: core_text.normalizeText(data?.scene, 120), sections };
+    return { scene: core_text.normalizeText(data?.scene, 120), sections, evidenceVersion: 1 };
+}
+
+// Existing records remain readable. Rechecking is display-only: it neither edits
+// stored prose nor grants old/model-provided flags authority over current evidence.
+export function intelRecordForDisplay(record, memory) {
+    if (!record || typeof record !== 'object') return null;
+    const sections = (Array.isArray(record.sections) ? record.sections : []).map((item, index) => {
+        const kind = SECTION_KINDS.includes(item?.kind) ? item.kind : SECTION_KINDS[Math.min(index, 2)];
+        const text = core_text.normalizeText(item?.text, 1600);
+        const proof = intelSectionEvidence(item, text, memory);
+        const unverified = !proof.verified && (proof.needsEvidence || (record.evidenceVersion !== 1 && kind !== 'advice'));
+        return { kind, text, ...(proof.verified ? proof.reference : { sourceMemoryIds: [], sourceMemoryAnchor: '' }),
+            evidenceState: proof.verified ? 'verified' : unverified ? 'unverified' : 'none' };
+    });
+    return { ...record, sections };
 }
 
 export function isIntelRunning(scope, key) {
@@ -127,7 +204,9 @@ export async function askIntel(personName, { onSettled } = {}) {
         catch (error) {
             const held = extras_store.stageExtraResult({ scope, kind: 'intel', origin, base, raw: data });
             return { pending: true, scope, record: null, durable: held.durable,
-                reason: '已收到结果，但格式需要检查。请导出原始结果，不会自动重新生成。' };
+                reason: error?.code === 'RMT_INTEL_EVIDENCE'
+                    ? '这次情报的往事依据未能核实，原始回复已保留供导出检查，不会自动重新生成。'
+                    : '已收到结果，但格式需要检查。请导出原始结果，不会自动重新生成。' };
         }
         const createdAt = Date.now();
         const record = { id: extras_store.extraRecordId('INTEL'), createdAt, person: person.name, relation: person.relation, ...result };
