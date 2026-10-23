@@ -5,6 +5,7 @@ import * as constants from '../core/constants.js';
 import * as cache from '../core/cache.js';
 import * as contextApi from '../core/context.js';
 import * as repository from '../archive/repository.js';
+import * as route_people from '../core/routeParticipants.js';
 import * as library from '../archive/library.js';
 import { state as runtimeState } from '../core/state.js';
 import * as text from '../core/text.js';
@@ -33,7 +34,11 @@ function sessionScope(session) { return JSON.stringify([session?.chatId, session
 export function inboxSenderLabel(letter, session) {
     const names = Array.isArray(letter?.participantNames) ? letter.participantNames.filter(Boolean)
         : Array.isArray(session?.participantNames) ? session.participantNames.filter(Boolean) : [];
-    return names.join('、') || session?.sender || '来信';
+    // 多人卡：这封信写的是谁就署谁，不把整份名单列出来。
+    const memory = (() => { try { return repository.getImportedMemory(contextApi.getContext()); } catch { return null; } })();
+    return route_people.storyCastLabel(memory, { sourceMemoryIds: letter?.sourceMemoryIds,
+        text: [letter?.title, letter?.greeting, letter?.body, letter?.closing].filter(value => typeof value === 'string').join('\n'),
+        fallback: names }) || session?.sender || '来信';
 }
 function resetView(session) {
     const scope = sessionScope(session);

@@ -97,7 +97,8 @@ function castTerms(person) {
         if (Array.from(term).length >= 2 && !/^[a-z0-9]{1,2}$/.test(term)) terms.add(term);
     };
     add(person.name);
-    for (const part of String(person.name || '').split(/[·・•\s/()（）「」【】]+/)) add(part);
+    add(participants.plainPersonName(person.name));
+    for (const part of participants.plainPersonName(person.name).split(/[·・•\s/()（）「」【】]+/)) add(part);
     for (const ref of person.sourceRefs || []) for (const keyword of ref.keys || []) add(keyword);
     return [...terms];
 }
@@ -121,11 +122,27 @@ export function archiveCastIds(roster, memory) {
     const text = texts.join('\n');
     return normalized.people.filter(person => person.identity !== 'user').filter(person => {
         const terms = castTerms(person);
-        const fullName = String(person.name || '').replace(/\s+/g, '').toLowerCase();
+        const fullName = participants.plainPersonName(person.name).replace(/\s+/g, '').toLowerCase();
         // 记忆里只写了名字的一部分（比如只写名不写姓）也算。
         return terms.some(term => named.has(term) || text.includes(term))
             || [...named].some(name => Array.from(name).length >= 2 && fullName.includes(name));
     }).map(person => person.id);
+}
+
+// 多人卡：一段内容只写这段剧情里的人。先看它引用的档案记忆里有谁，再看正文点到了谁，
+// 都找不到才用整页/整份的名字（超过 3 人时缩成「前 3 人 等 N 人」）。只用于显示。
+export function storyCastLabel(memory, { sourceMemoryIds = [], text = '', fallback = '' } = {}) {
+    let roster = null;
+    try { roster = participants.normalizeParticipantRoster(memory?.[participants.PARTICIPANTS_KEY]); } catch { roster = null; }
+    const fallbackLabel = participants.compactCastLabel(Array.isArray(fallback) ? fallback.join('、') : String(fallback || ''));
+    if (!roster) return fallbackLabel;
+    const label = ids => participants.compactCastLabel(ids.map(id => roster.people.find(person => person.id === id)?.name).filter(Boolean).join('、'));
+    const refs = new Set(Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []);
+    const memories = refs.size ? (Array.isArray(memory?.memories) ? memory.memories : []).filter(item => refs.has(item?.id)) : [];
+    const fromMemories = memories.length ? archiveCastIds(roster, { memories }) : [];
+    if (fromMemories.length) return label(fromMemories);
+    const fromText = text ? archiveCastIds(roster, { memories: [{ summary: String(text) }] }) : [];
+    return fromText.length ? label(fromText) : fallbackLabel;
 }
 
 // Resolve once at the click/queue boundary. Persist the resulting snapshot with

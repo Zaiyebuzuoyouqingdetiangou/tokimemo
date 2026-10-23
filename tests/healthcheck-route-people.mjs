@@ -14,11 +14,11 @@ function storage() {
         getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
 }
 const contextApi = { currentCharacterRuntimeKey: ctx => `${ctx.avatar}|slot:${ctx.characterId}` };
-const people = sourceModule('src/core/participants.js', {}, ['PARTICIPANTS_KEY', 'normalizeParticipantRoster', 'normalizeParticipantSnapshot', 'selectedParticipantSnapshot', 'resolveStoryIdentities', 'storyOwnerLabelAllowed', 'compactCastLabel']);
+const people = sourceModule('src/core/participants.js', {}, ['PARTICIPANTS_KEY', 'normalizeParticipantRoster', 'normalizeParticipantSnapshot', 'selectedParticipantSnapshot', 'resolveStoryIdentities', 'storyOwnerLabelAllowed', 'compactCastLabel', 'plainPersonName']);
 const generation = sourceModule('src/core/generationParticipants.js', { participants: people }, ['resolveGenerationParticipantSnapshot', 'deriveGenerationParticipantMemoryBank']);
 const composer = sourceModule('src/core/generationOptions.js', { contextApi, repository: {} }, ['composerScope']);
 function api() {
-    return sourceModule('src/core/routeParticipants.js', { contextApi, repository: {}, participants: people, generation, composer }, ['readRoutePeople', 'writeRoutePeople', 'captureRoutePeople', 'archiveCastIds']);
+    return sourceModule('src/core/routeParticipants.js', { contextApi, repository: {}, participants: people, generation, composer }, ['readRoutePeople', 'writeRoutePeople', 'captureRoutePeople', 'archiveCastIds', 'storyCastLabel']);
 }
 const ctx = { avatar: 'sandbox.png', characterId: 0, name2: '网球沙盒' };
 const bank = (revision = '2000-chat-ext', createdAt = 1000, chatId = 'chat-A') => ({
@@ -238,7 +238,7 @@ test('a large cast is shown as the first few names plus a count, not the whole r
     assert.equal(people.compactCastLabel('甲'), '甲');
     assert.equal(people.compactCastLabel(''), '');
     for (const file of ['src/ui/butterflyView.js', 'src/ui/pastLivesView.js', 'src/ui/timeStoriesView.js']) {
-        assert.match(readFileSync(`${root}/${file}`, 'utf8'), /compactCastLabel\(/, file);
+        assert.match(readFileSync(`${root}/${file}`, 'utf8'), /compactCastLabel\(|storyCastLabel\(/, file);
     }
 });
 
@@ -256,4 +256,18 @@ test('butterfly headers name the people in that branch, not the whole roster', (
     assert.equal(nodeSubjectName({ sourceMemoryIds: [], intervention: '陆远舟终于开口。' }, session, memory), '陆远舟', 'from the branch text');
     assert.equal(nodeSubjectName({ sourceMemoryIds: [], intervention: '没有人名。' }, session, memory), '林知夏、沈秋白、顾南星 等 4 人', 'falls back to the page cast, compacted');
     assert.equal(nodeSubjectName({ intervention: 'x' }, { subject: '单人' }, { memories: [] }), '单人', 'single-character cards are unchanged');
+});
+
+test('world-info style names like 「角色:某某」 are matched and shown without the prefix', () => {
+    const memory = { memories: [{ id: 'M1', title: '来信', summary: '某甲写信给你。', anchors: [], participants: [] }],
+        participantsV1: { version: 1, cardType: 'multi', selectedIds: ['a', 'b', 'c', 'd'], people: [
+            { id: 'a', name: '角色:某甲', sourceRefs: [] }, { id: 'b', name: '角色：某乙', sourceRefs: [] },
+            { id: 'c', name: '角色:某丙', sourceRefs: [] }, { id: 'd', name: '角色:某丁', sourceRefs: [] }] } };
+    const a = api();
+    assert.equal(a.storyCastLabel(memory, { sourceMemoryIds: ['M1'], fallback: '角色:某甲、角色：某乙、角色:某丙、角色:某丁' }), '某甲');
+    assert.equal(a.storyCastLabel(memory, { text: '某乙来了', fallback: [] }), '某乙');
+    assert.equal(a.storyCastLabel(memory, { text: '无名', fallback: ['角色:某甲', '角色：某乙', '角色:某丙', '角色:某丁'] }), '某甲、某乙、某丙 等 4 人');
+    for (const file of ['src/ui/inboxView.js', 'src/ui/timeStoriesView.js', 'src/ui/pastLivesView.js', 'src/ui/themeSongView.js', 'src/ui/calendarView.js', 'src/ui/butterflyView.js']) {
+        assert.match(readFileSync(`${root}/${file}`, 'utf8'), /storyCastLabel\(/, file);
+    }
 });

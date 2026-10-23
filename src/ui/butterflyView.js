@@ -12,21 +12,11 @@ import * as route_people from '../core/routeParticipants.js';
 import * as archive_repository from '../archive/repository.js';
 import * as ui_overlay from './overlay.js';
 
-// 多人卡：每个分歧点只写这一段剧情里的人。先看这段引用的档案记忆里有谁，
-// 再看正文里点到了谁；都找不到才用整页的人物。旧内容不用重新生成。
+// 多人卡：每个分歧点只写这一段剧情里的人；旧内容不用重新生成。
 function nodeSubjectName(node, session, memory) {
-    let roster = null;
-    try { roster = core_participants.normalizeParticipantRoster(memory?.[core_participants.PARTICIPANTS_KEY]); } catch { roster = null; }
-    const fallback = core_participants.compactCastLabel(session.subject);
-    if (!roster || !node) return fallback;
-    const names = ids => core_participants.compactCastLabel(ids.map(id => roster.people.find(person => person.id === id)?.name).filter(Boolean).join('、'));
-    const refs = new Set(Array.isArray(node.sourceMemoryIds) ? node.sourceMemoryIds : []);
-    const memories = (Array.isArray(memory?.memories) ? memory.memories : []).filter(item => refs.has(item?.id));
-    const fromMemories = memories.length ? route_people.archiveCastIds(roster, { memories }) : [];
-    if (fromMemories.length) return names(fromMemories);
-    const text = [node.label, node.monologue, node.intervention, node.sourceMemoryAnchor].filter(value => typeof value === 'string').join('\n');
-    const fromText = route_people.archiveCastIds(roster, { memories: [{ summary: text }] });
-    return fromText.length ? names(fromText) : fallback;
+    return route_people.storyCastLabel(memory, { sourceMemoryIds: node?.sourceMemoryIds,
+        text: [node?.label, node?.monologue, node?.intervention, node?.sourceMemoryAnchor].filter(value => typeof value === 'string').join('\n'),
+        fallback: session.subject });
 }
 
 export function renderButterfly() {
