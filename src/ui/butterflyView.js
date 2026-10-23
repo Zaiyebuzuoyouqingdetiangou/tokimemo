@@ -13,10 +13,17 @@ import * as archive_repository from '../archive/repository.js';
 import * as ui_overlay from './overlay.js';
 
 // 多人卡：每个分歧点只写这一段剧情里的人；旧内容不用重新生成。
-function nodeSubjectName(node, session, memory) {
+// 找不到时用这一页现在选的人物（指定人物／按档案剧情出场），再不行才用生成时存下的名字。
+function pageCast(session, memory, context) {
+    const names = context ? route_people.routeCastNames('butterfly', context, memory) : [];
+    return names.length ? names.join('、') : session.subject;
+}
+function nodeSubjectName(node, session, memory, context = null) {
+    const fallback = pageCast(session, memory, context);
+    if (node?.trueEnding) return core_participants.compactCastLabel(fallback);
     return route_people.storyCastLabel(memory, { sourceMemoryIds: node?.sourceMemoryIds,
         text: [node?.label, node?.monologue, node?.intervention, node?.sourceMemoryAnchor].filter(value => typeof value === 'string').join('\n'),
-        fallback: session.subject });
+        fallback });
 }
 
 export function renderButterfly() {
@@ -33,14 +40,10 @@ export function renderButterfly() {
     const branchNodes = branches.map((node, index) => `<button type="button" class="rmt-node rmt-branch-node ${index + 1 === session.selected ? 'active' : ''}" data-rmt-node="${index + 1}"><span>${String(index + 1).padStart(2, '0')}</span>${core_text.esc(node.label)}</button>`).join('');
     const endingIndex = session.nodes.length - 1;
     const isOmega = !!selected.trueEnding;
-    const castMemory = runtimeState.activeArchiveSnapshot || (() => { try { return archive_repository.getImportedMemory(core_context.getContext()); } catch { return null; } })();
-    // 抬头的「观测对象」也按这一页写到的人：所有分歧点引用的档案记忆和正文里出现的人；都找不到才用生成时存的整份名单。
-    const observerName = core_text.esc(route_people.storyCastLabel(castMemory, {
-        sourceMemoryIds: session.nodes.flatMap(node => Array.isArray(node?.sourceMemoryIds) ? node.sourceMemoryIds : []),
-        text: session.nodes.flatMap(node => [node?.label, node?.monologue, node?.intervention, node?.sourceMemoryAnchor]).filter(value => typeof value === 'string').join('\n'),
-        fallback: session.subject,
-    }) || runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2 || '{{char}}');
-    const speakerName = core_text.esc(nodeSubjectName(selected, session, castMemory) || observerName);
+    const castContext = (() => { try { return core_context.getContext(); } catch { return null; } })();
+    const castMemory = runtimeState.activeArchiveSnapshot || (() => { try { return archive_repository.getImportedMemory(castContext); } catch { return null; } })();
+    const observerName = core_text.esc(core_participants.compactCastLabel(pageCast(session, castMemory, castContext)) || runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2 || '{{char}}');
+    const speakerName = core_text.esc(nodeSubjectName(selected, session, castMemory, castContext) || observerName);
     const observationPanel = isOmega
         ? `<section class="rmt-terminal-block rmt-observation-screen rmt-omega-screen">
             <div class="rmt-terminal-section-title">III. OBSERVATION POINT Ω // 现世终局观测</div>
