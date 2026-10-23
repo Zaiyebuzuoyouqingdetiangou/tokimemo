@@ -190,6 +190,19 @@ export function resolveStoryIdentities(memoryBank = null, context = null, people
     return { cardName, userDisplay, userAliases, ownerNames, peopleNames: uniqueNames([...ownerNames, ...archivePeopleNames(memoryBank)]), compatNote };
 }
 
+// 番外、前世等页面会把生成时的人物名存进记录。「本页人物」只选了名单里的一部分时，
+// 存下的是这部分人的名字；读回时也要认，不然换了人物以后旧记录就读不出来。
+export function storyOwnerLabelAllowed(value, memoryBank = null) {
+    if (typeof value !== 'string' || !value) return false;
+    if (value === resolveStoryIdentities(memoryBank).ownerNames.join('、') || value === memoryBank?.characterName) return true;
+    let roster = null;
+    try { roster = normalizeParticipantRoster(memoryBank?.[PARTICIPANTS_KEY]); } catch { roster = null; }
+    if (!roster) return false;
+    const names = new Set(roster.people.filter(person => person.identity !== 'user').map(person => person.name));
+    const parts = value.split('、');
+    return parts.every(part => names.has(part)) && new Set(parts).size === parts.length;
+}
+
 export function promptIdentityLines(context, people = null, memoryBank = null) {
     const story = resolveStoryIdentities(memoryBank, context, people);
     const names = Array.isArray(people)

@@ -80,7 +80,7 @@ export function readableTimeStoriesSession(value, memory) {
     try {
         const raw = contract.timeStoriesStoredData(value);
         if (raw.chatId !== memory?.chatId || raw.archiveRevision !== memory?.archiveRevision
-            || ![ownerLabel(memory), memory?.characterName].includes(raw.characterName) || raw.userName !== memory?.userName) return null;
+            || !participants.storyOwnerLabelAllowed(raw.characterName, memory) || raw.userName !== memory?.userName) return null;
         return value;
     } catch { return null; }
 }
@@ -192,7 +192,7 @@ export function readableTimeStoriesProgressSession(value, memory) {
         if (value?.readableProgress?.version !== 1 || value.readableProgress.complete !== false) return null;
         const raw = contract.timeStoryData(value);
         if (raw.chatId !== memory?.chatId || raw.archiveRevision !== memory?.archiveRevision
-            || ![ownerLabel(memory), memory?.characterName].includes(raw.characterName) || raw.userName !== memory?.userName || !Array.isArray(raw.episodes)) return null;
+            || !participants.storyOwnerLabelAllowed(raw.characterName, memory) || raw.userName !== memory?.userName || !Array.isArray(raw.episodes)) return null;
         const completed = raw.episodes.filter(item => item.generationIncomplete !== true);
         contract.timeStoriesStoredData({ ...raw, episodes: completed });
         const ids = new Set(completed.map(item => item.id));
