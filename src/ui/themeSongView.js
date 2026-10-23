@@ -14,7 +14,19 @@ import * as song_player from './songPlayer.js';
 import * as recoveryView from './recoveryView.js';
 import * as overlay from './overlay.js';
 import * as text from '../core/text.js';
+import * as route_people from '../core/routeParticipants.js';
 import { state as runtimeState } from '../core/state.js';
+
+// 多人卡：演唱者和标题里只写这首歌讲到的人，不把整份名单列出来。
+function songCast(song, value) {
+    const label = String(value || '');
+    if (!label.includes('、')) return label;
+    const memory = (() => { try { return repository.getImportedMemory(contextApi.getContext()); } catch { return null; } })();
+    const cast = part => route_people.storyCastLabel(memory, { sourceMemoryIds: song?.sourceMemoryIds,
+        text: [song?.title, song?.sourceMemoryAnchor, song?.lyrics].filter(item => typeof item === 'string').join('\n'), fallback: part });
+    if (label.endsWith('的角色印象')) return cast(label.slice(0, -5)) + '的角色印象';
+    return label.split(' / ').map(part => part.includes('、') ? cast(part) : part).join(' / ');
+}
 const MODE = contract.THEME_SONG_MODE;
 const readonly = () => !!runtimeState.activeArchiveSnapshot && (runtimeState.activeArchiveReadOnly || runtimeState.activeArchiveSnapshot.backupOnly);
 const shownMemory = () => runtimeState.activeArchiveSnapshot?.memory || repository.getImportedMemory(contextApi.getContext());
@@ -188,14 +200,14 @@ export function renderThemeSongs() {
     }
     const mvButton = selected && !readonly() && !selected.generationIncomplete
         ? `<button type="button" class="rmt-btn" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">${mvLabel}</button>` : '';
-    const formatDetails = selected ? `<article class="rmt-song-sheet" data-rmt-song-presentation="format"><header><small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small><h2>${esc(selected.title)}</h2><p><b>演唱者</b> ${esc(selected.singer)} <span>· ${esc(contract.songLanguageLabel(selected))}</span></p><p>${esc(selected.vocalDescription)}</p></header>
+    const formatDetails = selected ? `<article class="rmt-song-sheet" data-rmt-song-presentation="format"><header><small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(songCast(selected, selected.subjectTitle))}</small><h2>${esc(selected.title)}</h2><p><b>演唱者</b> ${esc(songCast(selected, selected.singer))} <span>· ${esc(contract.songLanguageLabel(selected))}</span></p><p>${esc(selected.vocalDescription)}</p></header>
       <section class="rmt-song-style"><h3>曲风</h3><p>${esc(selected.styleDescription)}</p><div class="rmt-song-toolbar">${button('copy-title','复制歌名')}${button('copy-style','复制曲风')}</div><pre>${esc(selected.stylePrompt)}</pre></section>
       <section class="rmt-song-lyrics"><div class="rmt-song-toolbar"><h3>${selected.generationIncomplete ? '已收到的歌词 · 未完成' : '完整歌词'}</h3>${button('copy-lyrics','复制歌词')}</div><pre>${esc(selected.lyrics)}</pre></section>
       <footer class="rmt-song-toolbar">${button('copy-all','复制全部')}${button('export','导出文本')}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
       <div data-rmt-song-copy-fallback></div></article>` : '<div class="rmt-song-empty"><span aria-hidden="true">♫</span><h3>让故事有自己的旋律</h3><p>为角色写一首，或选一段真实回忆作为起点。</p></div>';
     const readDetails = selected ? `<article class="rmt-song-sheet rmt-song-readable" data-rmt-song-presentation="read"><header>
-      <small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small>
-      <h2>${esc(selected.title)}</h2><p>演唱者 · ${esc(selected.singer)}</p>
+      <small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(songCast(selected, selected.subjectTitle))}</small>
+      <h2>${esc(selected.title)}</h2><p>演唱者 · ${esc(songCast(selected, selected.singer))}</p>
       <p class="rmt-song-credit">作者 · 未署名（原创生成）</p>
       <details class="rmt-song-arrangement"><summary>曲风与人声</summary><p>${esc(selected.styleDescription)}</p><p>${esc(selected.vocalDescription)}</p></details></header>
       <div class="rmt-song-reading-lyrics">${songLyricsReadingHtml(selected.lyrics)}</div>
