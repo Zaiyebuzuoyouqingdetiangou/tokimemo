@@ -241,16 +241,30 @@ export function parseHearttraceReadme(text) {
     const input = String(text || '').replace(/^\uFEFF/, '');
     const heading = /^#\s+(.+?)\s+(\d+\.\d+\.\d+(?:-[\w.-]+)?)\s*$/m.exec(input);
     if (!heading) return [];
-    const groups = [];
+    // 每个版本一段：标题行是最新版，下面的「## 1.0.60 更新记录」各自另起一段，
+    // 旧版本的条目不会挂到新版本号下面。
+    const sections = [];
+    let section = { version: heading[2], title: heading[1], groups: [] };
     let group = null, paragraph = '';
     const flush = () => { if (paragraph && group) group.items.push(paragraph); paragraph = ''; };
+    const close = () => {
+        const items = section.groups.flatMap(row => row.items);
+        if (items.length) sections.push({ ...section, items });
+    };
     for (const raw of input.split(/\r?\n/)) {
         const line = raw.trim();
         if (/^#{1,6}\s/.test(line)) {
             flush();
-            const match = /^##\s+(更新日志模块|本次变动|本次更新)\s*$/.exec(line);
+            const older = /^##\s+(\d+\.\d+\.\d+(?:-[\w.-]+)?)\s*更新记录\s*$/.exec(line);
+            if (older) {
+                close();
+                section = { version: older[1], title: heading[1], groups: [] };
+                group = null;
+                continue;
+            }
+            const match = /^##\s+(更新日志模块|本次变动|本次更新|本次修复)\s*$/.exec(line);
             group = match ? { title: match[1], items: [] } : null;
-            if (group) groups.push(group);
+            if (group) section.groups.push(group);
             continue;
         }
         if (!group) continue;
@@ -260,8 +274,8 @@ export function parseHearttraceReadme(text) {
         else paragraph = paragraph ? `${paragraph} ${line}` : line;
     }
     flush();
-    const items = groups.flatMap(row => row.items);
-    return items.length ? [{ version: heading[2], title: heading[1], groups, items }] : [];
+    close();
+    return sections;
 }
 
 // The installed README.md beside index.js, on this same server (never GitHub).
