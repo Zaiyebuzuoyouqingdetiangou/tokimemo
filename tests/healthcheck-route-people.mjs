@@ -14,7 +14,7 @@ function storage() {
         getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
 }
 const contextApi = { currentCharacterRuntimeKey: ctx => `${ctx.avatar}|slot:${ctx.characterId}` };
-const people = sourceModule('src/core/participants.js', {}, ['PARTICIPANTS_KEY', 'normalizeParticipantRoster', 'normalizeParticipantSnapshot', 'selectedParticipantSnapshot', 'resolveStoryIdentities']);
+const people = sourceModule('src/core/participants.js', {}, ['PARTICIPANTS_KEY', 'normalizeParticipantRoster', 'normalizeParticipantSnapshot', 'selectedParticipantSnapshot', 'resolveStoryIdentities', 'storyOwnerLabelAllowed']);
 const generation = sourceModule('src/core/generationParticipants.js', { participants: people }, ['resolveGenerationParticipantSnapshot', 'deriveGenerationParticipantMemoryBank']);
 const composer = sourceModule('src/core/generationOptions.js', { contextApi, repository: {} }, ['composerScope']);
 function api() {
@@ -216,4 +216,18 @@ test('archive strategy follows archive updates and refuses an empty cast instead
     assert.deepEqual(a.captureRoutePeople('butterfly', ctx, later, { storage: s }).people.map(p => p.id), ['p4']);
     assert.deepEqual(a.archiveCastIds(castBank([{ id: 'M1', title: '夏', summary: '一个夏天', anchors: [], participants: [] }]).participantsV1,
         castBank([{ id: 'M1', title: '夏', summary: '一个夏天', anchors: [], participants: [] }])), [], 'a single shared character does not match a name');
+});
+
+test('pages saved with only some of the cast stay readable, and butterfly updates follow the current cast', () => {
+    const memory = castBank([]);
+    assert.equal(people.storyOwnerLabelAllowed('林知夏', memory), true, 'one chosen person');
+    assert.equal(people.storyOwnerLabelAllowed('林知夏、顾南星', memory), true, 'a chosen subset');
+    assert.equal(people.storyOwnerLabelAllowed('林知夏、沈秋白、顾南星、陆远舟', memory), true, 'the whole cast');
+    assert.equal(people.storyOwnerLabelAllowed('沙盒', memory), true, 'the card name');
+    assert.equal(people.storyOwnerLabelAllowed('林知夏、外人', memory), false, 'someone outside the roster');
+    assert.equal(people.storyOwnerLabelAllowed('我', memory), false, 'the user is not an owner');
+    assert.equal(people.storyOwnerLabelAllowed('林知夏、林知夏', memory), false);
+    const butterfly = readFileSync(`${root}/src/modes/butterfly.js`, 'utf8');
+    assert.equal((butterfly.match(/mergeButterflyIncremental\([^)]*\)?[^;]*butterflySubjectName\(memoryBank, context\)\)/g) || []).length, 2, 'both update paths pass the current cast');
+    assert.match(butterfly, /\.\.\.\(subject \? \{ subject \} : \{\}\)/);
 });
