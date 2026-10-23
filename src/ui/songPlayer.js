@@ -3,12 +3,18 @@
 import * as mv from '../extras/mv.js';
 import * as mv_media from '../extras/mvMedia.js';
 import * as music_link from '../extras/mvMusicLink.js';
+import * as audio_source from '../extras/mvAudioSource.js';
 import * as core_context from '../core/context.js';
 import * as core_text from '../core/text.js';
 
 export const AUDIO_CHANGED_EVENT = 'hearttrace:mv-audio-changed';
 const loaded = new Map();     // key → { url, name, streaming, sourceUrl, unsaved? }
 const pending = new Map();    // key → AbortController
+const operations = new Map(); // key → latest import/remove operation
+const committedOperations = new Map(); // key → newest confirmed storage operation
+const unsettledStorage = new Map(); // key → operations still waiting for a storage receipt
+let operationSequence = 0;
+const revisions = new Map();  // invalidates late storage reads
 const status = new Map();     // key → last status text
 const fill = new Map();       // key → full link to show in the input after a short link resolved
 let repaint = null;
@@ -28,6 +34,7 @@ function announce(key) {
 }
 
 function remember(key, entry) {
+    revisions.set(key, (revisions.get(key) || 0) + 1);
     const old = loaded.get(key);
     if (old && !old.streaming && old.url !== entry?.url) { try { URL.revokeObjectURL(old.url); } catch {} }
     if (entry) loaded.set(key, entry); else loaded.delete(key);
@@ -37,127 +44,222 @@ function remember(key, entry) {
 export async function loadSongAudio(context, songId) {
     const key = songAudioKey(context, songId);
     if (loaded.has(key)) return loaded.get(key);
+    const revision = revisions.get(key) || 0;
     const row = await mv_media.getMedia(key);
+    if (revision !== (revisions.get(key) || 0) || loaded.has(key)) return loaded.get(key) || null;
     if (!row?.blob && !row?.mediaUrl) return null;
-    const entry = { url: row.blob ? URL.createObjectURL(row.blob) : music_link.musicUrl(row.mediaUrl), name: row.name || '已保存的歌曲', streaming: !row.blob, sourceUrl: row.sourceUrl || '', artist: row.artist || '', coverUrl: row.coverUrl || '' };
+    const entry = { blob: row.blob || null, url: row.blob ? URL.createObjectURL(row.blob) : music_link.musicUrl(row.mediaUrl), name: row.name || '已保存的歌曲', streaming: !row.blob, sourceUrl: row.sourceUrl || '', artist: row.artist || '', coverUrl: row.coverUrl || '' };
     remember(key, entry);
     return entry;
 }
 
 // Make sure the bytes really decode before keeping them, so a wrong link never
 // becomes a silent track for the MV later.
-function probeAudio(url, { signal } = {}) {
+function probeAudio(url, { signal, requireData = false } = {}) {
     return new Promise((resolve, reject) => {
-        const probe = new Audio(); probe.preload = 'metadata';
+        if (signal?.aborted) { reject(new DOMException('已取消', 'AbortError')); return; }
+        const probe = new Audio(); probe.preload = requireData ? 'auto' : 'metadata';
         let done = false;
+        const abort = () => finish(null, new DOMException('已取消', 'AbortError'));
         const finish = (ok, error) => {
             if (done) return; done = true; clearTimeout(timer);
-            probe.onloadedmetadata = null; probe.onerror = null;
+            signal?.removeEventListener?.('abort', abort);
+            probe.onloadedmetadata = null; probe.onloadeddata = null; probe.oncanplay = null; probe.onerror = null;
             try { probe.removeAttribute?.('src'); probe.load?.(); } catch {}
             ok ? resolve(ok) : reject(error);
         };
         const timer = setTimeout(() => finish(null, core_text.safeUserError('音频读取超时，原有歌曲未替换。', 'RMT_MV_AUDIO_TIMEOUT')), 30000);
-        signal?.addEventListener?.('abort', () => finish(null, new DOMException('已取消', 'AbortError')), { once: true });
-        probe.onloadedmetadata = () => {
+        signal?.addEventListener?.('abort', abort, { once: true });
+        const ready = () => {
+            if (requireData && probe.readyState < 2) return;
             const duration = Number.isFinite(probe.duration) ? probe.duration : 0;
             duration > 0 ? finish({ duration }) : finish(null, core_text.safeUserError('这段音频无法取得完整时长，原有歌曲未替换。', 'RMT_MV_AUDIO'));
         };
+        probe.onloadedmetadata = ready;
+        if (requireData) { probe.onloadeddata = ready; probe.oncanplay = ready; }
         probe.onerror = () => finish(null, core_text.safeUserError('这个地址无法作为音频播放，原有歌曲未替换。', 'RMT_MV_AUDIO'));
         probe.src = url;
     });
 }
 
-async function commit(context, songId, media) {
-    const key = songAudioKey(context, songId);
-    const streaming = !media.blob;
-    // Online play may offer more than one address; keep the first that plays.
-    const candidates = streaming ? [media.url, ...(Array.isArray(media.alternates) ? media.alternates : [])].filter(Boolean) : [null];
-    let url, probed, failure;
-    for (const candidate of candidates) {
-        url = streaming ? music_link.musicUrl(candidate) : URL.createObjectURL(media.blob);
-        try { probed = await probeAudio(url); break; }
-        catch (error) {
-            if (!streaming) { try { URL.revokeObjectURL(url); } catch {} }
-            if (error?.name === 'AbortError') throw error;
-            failure = error;
-        }
-    }
-    if (!probed) {
-        if (media.failText) throw core_text.safeUserError(media.failText, 'RMT_MV_AUDIO');
-        throw failure;
-    }
-    try { mv.patchRecord(songId, { duration: probed.duration }, mv.captureMvTarget(context, songId)); } catch { /* No storyboard yet is fine. */ }
-    const name = core_text.normalizeText(media.name, 80) || '链接歌曲';
-    const artist = core_text.normalizeText(media.artist || '', 80), coverUrl = /^https:\/\//.test(media.coverUrl || '') ? media.coverUrl : '';
-    const saved = await mv_media.putMedia(key, streaming ? null : media.blob, name, { sourceUrl: media.sourceUrl || '', artist, coverUrl, ...(streaming ? { mediaUrl: url } : {}) });
-    // Not saved on this device: this entry is the only copy, so teardown must not release it.
-    remember(key, { url, name, streaming, sourceUrl: media.sourceUrl || '', artist, coverUrl, ...(saved ? {} : { unsaved: true }) });
-    announce(key);
-    return { saved, streaming, name };
+function startOperation(key, importing = true) {
+    const previous = operations.get(key);
+    const operation = { key, sequence: ++operationSequence, controller: new AbortController(), committed: false };
+    operations.set(key, operation);
+    revisions.set(key, (revisions.get(key) || 0) + 1);
+    previous?.controller.abort();
+    pending.delete(key);
+    if (importing) pending.set(key, operation.controller);
+    return operation;
+}
+function isLatest(operation) { return operations.get(operation.key) === operation; }
+function canContinue(operation) { return isLatest(operation) && !operation.controller.signal.aborted && (!operation.isCurrent || operation.isCurrent()); }
+function requireCurrent(operation) {
+    if (!canContinue(operation)) throw new DOMException('已取消', 'AbortError');
+}
+function acceptCommitted(operation) {
+    operation.committed = true;
+    if ((committedOperations.get(operation.key) || 0) >= operation.sequence) return false;
+    committedOperations.set(operation.key, operation.sequence);
+    return true;
 }
 
-export async function importSongLink(context, songId, value) {
+async function storeForOperation(operation, action) {
+    const entries = unsettledStorage.get(operation.key) || new Set();
+    entries.add(operation); unsettledStorage.set(operation.key, entries);
+    try { return await action(); }
+    finally {
+        entries.delete(operation);
+        if (!entries.size) unsettledStorage.delete(operation.key);
+    }
+}
+function hasEarlierStorage(operation) {
+    return [...(unsettledStorage.get(operation.key) || [])].some(earlier => earlier.sequence < operation.sequence);
+}
+
+async function commit(context, songId, media, operation) {
+    const { key, controller } = operation, streaming = !media.blob;
+    const target = operation.target;
+    const candidates = streaming ? [media.url, ...(Array.isArray(media.alternates) ? media.alternates : [])].filter(Boolean) : [null];
+    let url, probed, failure, retained = false;
+    try {
+        const fromVideo = !streaming && audio_source.isVideoAudioSource(media.blob, media.name);
+        if (fromVideo) await audio_source.inspectVideoAudioSource(media.blob, { signal: controller.signal });
+        for (const candidate of candidates) {
+            requireCurrent(operation);
+            url = streaming ? music_link.musicUrl(candidate) : URL.createObjectURL(media.blob);
+            try { probed = await probeAudio(url, { signal: controller.signal, requireData: fromVideo }); break; }
+            catch (error) {
+                if (!streaming) { try { URL.revokeObjectURL(url); } catch {} url = ''; }
+                if (error?.name === 'AbortError') throw error;
+                failure = error;
+            }
+        }
+        requireCurrent(operation);
+        if (!probed) {
+            if (media.failText) throw core_text.safeUserError(media.failText, 'RMT_MV_AUDIO');
+            throw failure || core_text.safeUserError('没有可播放的音频，原有歌曲未替换。', 'RMT_MV_AUDIO');
+        }
+        const name = core_text.normalizeText(media.name, 80) || '链接歌曲';
+        const artist = core_text.normalizeText(media.artist || '', 80), coverUrl = /^https:\/\//.test(media.coverUrl || '') ? media.coverUrl : '';
+        const details = { sourceUrl: media.sourceUrl || '', artist, coverUrl, ...(streaming ? { mediaUrl: url } : {}) };
+        const publish = (unsaved = false) => {
+            retained = true;
+            remember(key, { url, blob: media.blob || null, duration: probed.duration, name, streaming, sourceUrl: details.sourceUrl, artist, coverUrl, ...(unsaved ? { unsaved: true } : {}) });
+            if (target) { try { mv.patchRecord(songId, { duration: probed.duration }, target); } catch { /* Audio is still available. */ } }
+            announce(key);
+        };
+        const saved = await storeForOperation(operation, () => mv_media.putMedia(key, streaming ? null : media.blob, name, details, {
+            signal: controller.signal, isCurrent: () => canContinue(operation),
+            onCommitted: () => {
+                // Starting a replacement cannot hide a write that already committed:
+                // the replacement may still fail. Only a newer confirmed write wins.
+                if (!acceptCommitted(operation)) return;
+                publish();
+            },
+        }));
+        if (!saved) {
+            requireCurrent(operation);
+            // A failed write must preserve durable audio. A previously unsaved
+            // track can still be replaced in memory; recheck storage so a prior
+            // committed write with a delayed receipt cannot become temporary. If its
+            // receipt is still pending and reads fail too, keep the old track;
+            // a manual retry can use the receipt once it arrives, without waiting.
+            const previous = loaded.get(key);
+            const stored = previous && !previous.unsaved ? previous : await mv_media.getMedia(key);
+            requireCurrent(operation);
+            const latest = loaded.get(key);
+            if (stored || (latest && !latest.unsaved) || hasEarlierStorage(operation)) throw core_text.safeUserError('音源未能保存，原有歌曲保留，请重试。', 'RMT_MV_AUDIO_SAVE');
+            operation.temporary = true;
+            publish(true);
+        }
+        return { saved, streaming, name };
+    } finally {
+        if (!streaming && url && !retained) { try { URL.revokeObjectURL(url); } catch {} }
+    }
+}
+
+async function importAudio(context, songId, source, isFile, options = {}) {
     const key = songAudioKey(context, songId);
-    let sourceUrl;
-    try { sourceUrl = music_link.musicUrl(value); }
-    catch (error) { status.set(key, error.message); repaint?.(); return false; }
-    pending.get(key)?.abort();
-    const controller = new AbortController();
-    pending.set(key, controller);
-    status.set(key, '正在读取音乐…'); repaint?.();
+    let value = source;
+    if (!isFile) {
+        try { value = music_link.musicUrl(source); }
+        catch (error) { status.set(key, error.message); repaint?.(); return false; }
+    } else if (!source) return false;
+    const operation = startOperation(key), { controller } = operation;
+    operation.isCurrent = options.isCurrent;
+    const cancel = () => controller.abort();
+    options.signal?.addEventListener?.('abort', cancel, { once: true });
+    if (options.signal?.aborted) cancel();
+    // Freeze the origin before link fetching, audio decoding or storage waits.
+    try { operation.target = mv.captureMvTarget(context, songId); } catch { /* A song may have no storyboard yet. */ }
+    status.set(key, isFile ? '正在检查音频…' : '正在读取音乐…'); repaint?.();
     const timer = setTimeout(() => controller.abort(), 60000);
     try {
-        const media = await music_link.readMusicLink(sourceUrl, { signal: controller.signal });
-        if (pending.get(key) !== controller) return false;
+        requireCurrent(operation);
+        const media = isFile ? { blob: value, name: value.name }
+            : await music_link.readMusicLink(value, { signal: controller.signal });
+        requireCurrent(operation);
         status.set(key, '正在检查音频…'); repaint?.();
-        const result = await commit(context, songId, media);
-        if (pending.get(key) !== controller) return false;
+        const result = await commit(context, songId, media, operation);
+        if (!isLatest(operation) || (!operation.committed && !operation.temporary)) return false;
         const done = result.streaming ? '已接入在线播放。导出手书视频时需要能下载这首歌，若导不出可改用「选择文件」。'
             : result.saved ? '已导入，这台设备会记住；制作手书时直接使用。' : '已导入，但这台设备没能记住，下次打开可能要重新导入。';
         if (media.resolvedFrom && media.sourceUrl) fill.set(key, media.sourceUrl);
         status.set(key, media.resolvedFrom ? `短链接已换成完整歌曲链接。${done}` : done);
         return true;
     } catch (error) {
-        if (pending.get(key) === controller) {
+        if (isLatest(operation) && pending.get(key) === controller) {
             status.set(key, controller.signal.aborted ? '音乐读取超时或已取消，原有歌曲未替换。'
                 : /^RMT_MV_/.test(error?.code || '') ? String(error.message) : (core_text.safeErrorSummary(error) || '读取没有完成，原有歌曲未替换。'));
         }
         return false;
     } finally {
         clearTimeout(timer);
+        options.signal?.removeEventListener?.('abort', cancel);
         if (pending.get(key) === controller) pending.delete(key);
         repaint?.();
     }
 }
 
-export async function importSongFile(context, songId, file) {
-    const key = songAudioKey(context, songId);
-    if (!file) return false;
-    pending.get(key)?.abort();
-    status.set(key, '正在检查音频…'); repaint?.();
-    try {
-        const result = await commit(context, songId, { blob: file, name: file.name });
-        status.set(key, result.saved ? '已导入，这台设备会记住；制作手书时直接使用。' : '已导入，但这台设备没能记住，下次打开可能要重新导入。');
-        return true;
-    } catch (error) {
-        status.set(key, core_text.safeErrorSummary(error) || '音频未能导入，原有歌曲未替换。');
-        return false;
-    } finally { repaint?.(); }
-}
+export function importSongLink(context, songId, value, options = {}) { return importAudio(context, songId, value, false, options); }
+export function importSongFile(context, songId, file, options = {}) { return importAudio(context, songId, file, true, options); }
+export function songAudioNote(context, songId) { return status.get(songAudioKey(context, songId)) || ''; }
 
 export async function removeSongAudio(context, songId) {
-    const key = songAudioKey(context, songId);
-    pending.get(key)?.abort(); pending.delete(key);
-    const ok = await mv_media.deleteMedia(key);
-    if (ok) { remember(key, null); announce(key); status.set(key, '已移除这首歌的音源。'); }
-    else status.set(key, '音源未能移除，原有音源保留。');
+    const key = songAudioKey(context, songId), operation = startOperation(key, false);
+    const ok = await storeForOperation(operation, () => mv_media.deleteMedia(key, {
+        signal: operation.controller.signal, isCurrent: () => canContinue(operation),
+        onCommitted: () => {
+            if (!acceptCommitted(operation)) return;
+            remember(key, null); fill.delete(key); announce(key);
+            if (isLatest(operation)) status.set(key, '已移除这首歌的音源。');
+        },
+    }));
+    let removedTemporary = false;
+    if (!ok && canContinue(operation)) {
+        const previous = loaded.get(key);
+        // Only an explicitly unsaved in-memory entry may be removed without a
+        // storage receipt. Never report a durable deletion when it failed.
+        if (previous?.unsaved) {
+            const stored = await mv_media.getMedia(key);
+            if (!stored && canContinue(operation) && loaded.get(key) === previous && !hasEarlierStorage(operation)) {
+                remember(key, null); fill.delete(key); announce(key);
+                status.set(key, '已移除临时音源。');
+                removedTemporary = true;
+            }
+        }
+        if (!removedTemporary && canContinue(operation)) status.set(key, '音源未能移除，原有音源保留。');
+    }
     repaint?.();
-    return ok;
+    return ok || removedTemporary;
 }
 
 export function cancelSongImport(context, songId) {
-    const key = songAudioKey(context, songId);
-    pending.get(key)?.abort(); pending.delete(key);
+    const key = songAudioKey(context, songId), controller = pending.get(key);
+    if (!controller) return;
+    controller.abort(); pending.delete(key);
+    revisions.set(key, (revisions.get(key) || 0) + 1);
     status.set(key, ''); repaint?.();
 }
 

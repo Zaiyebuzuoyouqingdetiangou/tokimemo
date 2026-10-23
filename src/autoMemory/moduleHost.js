@@ -9,6 +9,7 @@ import * as auto_memory_gap from './gapFill.js';
 import * as auto_memory_plans from './modulePlans.js';
 import * as auto_memory_registry from './moduleRegistry.js';
 import * as auto_memory_runner from './moduleRunner.js';
+import * as auto_memory_round from './roundContext.js';
 
 function loadSession(mode, context, memory) {
     try { return core_cache.loadSession(mode, { context, memoryBank: memory, clone: true }); }
@@ -81,16 +82,23 @@ function stepOptions(step, plan) {
     return options;
 }
 
-export async function executeModuleStep({ step, plan, carryAchievement }, context) {
-    // r84.175：最后一步顺便给「等批注」的手帐页写一句（读不到手帐就当没有，不影响本轮）。
+export async function executeModuleStep({ step, plan, carryAchievement }, context, round) {
+    auto_memory_round.assertAutoMemoryRound(round);
+    // r84.175：携带成就的步骤顺便给「等批注」的手帐页写一句（读不到手帐就当没有，不影响本轮）。
     const wanted = carryAchievement ? await journal_piggyback.wantedJournalPages() : { scope: '', pages: [] };
-    if (carryAchievement) generation_achievement.armAchievementCapture({ journalPages: wanted.pages, charName: context?.name2, userName: context?.name1 });
+    auto_memory_round.assertAutoMemoryRound(round);
+    const capture = carryAchievement ? generation_achievement.armAchievementCapture({ journalPages: wanted.pages,
+        charName: context?.name2, userName: context?.name1, signal: round.task.signal }) : null;
     try {
-        const result = await generation_client.generateMode(plan.moduleId, stepOptions(step, plan));
-        const journalNotes = generation_achievement.takeJournalNotes();
-        const achievement = generation_achievement.finishAchievementCapture();
-        if (Object.keys(journalNotes).length) void journal_piggyback.saveJournalNotes(wanted.scope, journalNotes, context?.name2 || '');
-        if (!result || result.status === 'failed' || result.status === 'cancelled' || result.status === 'blocked') return { saved: false };
+        const result = await generation_client.generateMode(plan.moduleId, { ...stepOptions(step, plan), ...auto_memory_round.generationOptions(round), autoMemoryCapture: capture });
+        auto_memory_round.assertAutoMemoryRound(round);
+        const journalNotes = generation_achievement.takeJournalNotes(capture);
+        const achievement = generation_achievement.finishAchievementCapture(capture);
+        if (Object.keys(journalNotes).length) {
+            await journal_piggyback.saveJournalNotes(wanted.scope, journalNotes, context?.name2 || '');
+            auto_memory_round.assertAutoMemoryRound(round);
+        }
+        if (!result || result.status === 'failed' || result.status === 'cancelled' || result.status === 'blocked' || result.status === 'deferred') return { saved: false };
         if (result?.status === 'noop') return { noop: true };
         if (step.kind === 'catalog') {
             const facts = collectModuleFacts(plan.moduleId, context, plan);
@@ -99,23 +107,26 @@ export async function executeModuleStep({ step, plan, carryAchievement }, contex
         }
         return { saved: true, recoverySlot: `${plan.moduleId}:${step.id}`, achievement };
     } catch (error) {
-        generation_achievement.finishAchievementCapture();
+        generation_achievement.finishAchievementCapture(capture);
         throw error;
     }
 }
 
-export async function runModulePlan(snapshot, persist, context, now = Date.now()) {
+export async function runModulePlan(snapshot, persist, context, now = Date.now(), round) {
+    auto_memory_round.assertAutoMemoryRound(round);
     const item = auto_memory_registry.autoMemoryModuleById(snapshot?.modulePlan?.moduleId);
     const plan = snapshot?.modulePlan;
     return auto_memory_runner.runPending(snapshot, {
         now,
         module: item,
         persist,
-        execute: request => executeModuleStep(request, context),
+        execute: request => executeModuleStep(request, context, round),
         heldAchievement: () => auto_memory_gap.readPendingAchievement(context?.chatMetadata, plan?.drawId),
-        holdAchievement: packet => {
+        holdAchievement: async packet => {
+            auto_memory_round.assertAutoMemoryRound(round);
             if (!auto_memory_gap.holdPendingAchievement(context?.chatMetadata, { drawId: plan?.drawId, moduleId: plan?.moduleId, achievement: packet })) return;
-            context?.saveMetadataDebounced?.();
+            await context?.saveMetadataDebounced?.();
+            auto_memory_round.assertAutoMemoryRound(round);
         },
     });
 }

@@ -143,6 +143,17 @@ function participantAppearanceSource(person, context) {
     return sources.join('\n');
 }
 
+function roleAppearanceSources(context) {
+    let card = {};
+    try { card = context?.getCharacterCardFields?.() || {}; } catch {}
+    return {
+        char: [sourceText(card.description, context), sourceText(card.personality, context)]
+            .filter(Boolean).join('\n').slice(0, 5000),
+        user: sourceText(card.persona, context)
+            || sourceText(context?.powerUserSettings?.persona_description, context),
+    };
+}
+
 export function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBaiImage, castSnapshot = null, selectedRoles = null } = {}) {
     const snapshot = participants.normalizeParticipantSnapshot(castSnapshot);
     if (snapshot) {
@@ -165,21 +176,20 @@ export function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBai
             missingParticipantIds: Object.freeze(characters.filter(row => !row.description && !row.knownTag && !row.knownNl).map(row => row.participantId)) });
     }
     const confirmed = cast_looks.readCastLooks(context);
-    let card = {};
-    if (!confirmed?.manual) { try { card = context?.getCharacterCardFields?.() || {}; } catch {} }
-    const characterDescription = [sourceText(card.description, context), sourceText(card.personality, context)]
-        .filter(Boolean).join('\n').slice(0, 5000);
-    const userDescription = sourceText(card.persona, context)
-        || sourceText(context?.powerUserSettings?.persona_description, context);
     const roles = ROLES.filter(role => !Array.isArray(selectedRoles) || selectedRoles.includes(role));
     const presets = image_presets.resolveImageAppearancePresets(context,
         appearancePresetRoster(context), { api });
+    // Saving one person's look must not hide the other person's source. Known
+    // nonempty looks still win without rereading the host card unnecessarily.
+    const sources = roles.some(role => !presets.has(role)
+        && (!confirmed?.manual || !plain(confirmed[role], CG_APPEARANCE_TAG_LIMIT)))
+        ? roleAppearanceSources(context) : null;
     const characters = roles.map(role => {
         const name = plain(role === 'char' ? context?.name2 : context?.name1, 120);
         const preset = presets.get(role);
-        const manualTag = confirmed?.manual ? confirmed[role] : '';
+        const manualTag = confirmed?.manual ? plain(confirmed[role], CG_APPEARANCE_TAG_LIMIT) : '';
 
-        return Object.freeze({ role, name, description: preset || confirmed?.manual ? '' : role === 'char' ? characterDescription : userDescription,
+        return Object.freeze({ role, name, description: preset || manualTag ? '' : sources?.[role] || '',
             knownTag: appearanceText(preset?.tag || preset?.nl || (confirmed?.manual ? manualTag : ''), { presetAppearance: !!preset }),
             knownNl: '',
             ...(preset ? { presetAppearance: true, fallbackTag: plain(confirmed?.manual ? manualTag : cast_looks.lookFromRoleDescription(confirmed?.[role], role, context), CG_APPEARANCE_TAG_LIMIT),
@@ -482,6 +492,7 @@ export function appearanceEvidenceForFormat(evidence, promptFormat) {
 }
 export function appearanceEvidenceWithDraft(evidence, draft, context = null) {
     if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return evidence;
+    let roleSources;
     return { ...evidence, characters: (evidence?.characters || []).map(row => {
         const key = evidence.castSnapshot ? row.participantId : row.role;
         const current = Object.hasOwn(draft, key) ? draft[key] : null;
@@ -521,7 +532,12 @@ export function appearanceEvidenceWithDraft(evidence, draft, context = null) {
         if (!ROLES.includes(row.role) || !Object.hasOwn(draft, row.role)) return row;
         const value = draft[row.role];
         if (typeof value !== 'string' && (!value || typeof value !== 'object' || Array.isArray(value))) return row;
-        return { ...withoutNegative, knownTag: appearanceText(typeof value === 'string' ? value : value.tag, value), knownNl: '', ...presetProvenance(value),
+        const knownTag = appearanceText(typeof value === 'string' ? value : value.tag, value);
+        // Explicit re-extraction after clearing a saved look needs that role's
+        // source again. Keep this read local to the action and shared by both roles.
+        const description = !knownTag && !row.description && context
+            ? (roleSources ||= roleAppearanceSources(context))[row.role] : row.description;
+        return { ...withoutNegative, description, knownTag, knownNl: '', ...presetProvenance(value),
             ...(typeof value === 'string' || value.appearanceOverride === true ? { appearanceOverride: true } : {}) };
     }) };
 }

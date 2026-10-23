@@ -294,7 +294,7 @@ globalThis.addEventListener?.('hearttrace:mv-audio-changed', event => {
     const open = isView() && audioKey() === key;
     if (old) {
         audioBySong.delete(key);
-        if (open) { try { stopPlayback(); } catch {} player.audio = null; }
+        if (open) { const time = currentTime(); try { stopPlayback(); } catch {} player.audio = null; player.clockOffset = time; }
         if (!old.streaming) { try { URL.revokeObjectURL(old.url); } catch {} }
     }
     if (open) { restoreAudio(); try { renderMv(); } catch {} }
@@ -311,17 +311,18 @@ function restoreAudio() {
     audioTried.add(key);
     const token = {}, opened = viewTarget();
     audioLoads.set(key, token);
-    void mv_media.getMedia(key).then(row => {
-        if ((row?.blob || row?.mediaUrl) && audioLoads.get(key) === token) {
+    void song_player.loadSongAudio(context, view.songId).then(entry => {
+        if (entry && audioLoads.get(key) === token) {
+            const row = { blob: entry.blob, mediaUrl: entry.streaming ? entry.url : '', name: entry.name, sourceUrl: entry.sourceUrl };
             if (audio_source.isVideoAudioSource(row.blob, row.name) && !isView(opened)) {
                 audioTried.delete(key); audioLoads.delete(key); return;
             }
-            return acceptAudio(row.blob || row.mediaUrl, row.name || '已保存的歌曲', false, target, token, { sourceUrl: row.sourceUrl || '', mediaUrl: row.mediaUrl || '' });
+            return acceptAudio(row.blob || row.mediaUrl, row.name || '已保存的歌曲', target, token, { sourceUrl: row.sourceUrl || '', mediaUrl: row.mediaUrl || '' });
         }
     }).catch(() => audioTried.delete(key));
 }
 
-function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), view.songId), token = {}, details = {}) {
+function acceptAudio(blob, name, target = mv.captureMvTarget(ctx(), view.songId), token = {}, details = {}) {
     const key = audioKey(target);
     const opened = viewTarget();
     if (isView(opened) && audioKey() === key) view.audioStatus = '';
@@ -348,7 +349,7 @@ function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), vie
                 URL.revokeObjectURL(url);
                 // Failed automatic restore gets one attempt per open, otherwise
                 // its error redraw would restore the same bad recording forever.
-                if (audioLoads.get(key) === token && !(fromVideo && !persist && error)) audioTried.delete(key);
+                if (audioLoads.get(key) === token && !(fromVideo && error)) audioTried.delete(key);
                 if (error && isView(opened) && audioLoads.get(key) === token) toastError(error);
             }
             if (fromVideo && isView(opened) && audioLoads.get(key) === token) {
@@ -369,17 +370,13 @@ function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), vie
             const duration = Number.isFinite(probe.duration) ? probe.duration : 0;
             if ((details.sourceUrl || fromVideo) && duration <= 0) { finish(false, core_text.safeUserError('这段音频无法取得完整时长，原有歌曲未替换。', 'RMT_MV_AUDIO')); return; }
             try {
-                const updated = mv.patchRecord(target.songId, { duration }, target);
-                // A track kept from the song page may predate any storyboard; only a
-                // fresh import must land on the current record.
-                if ((details.sourceUrl || fromVideo) && !updated && persist) { finish(false, core_text.safeUserError('当前歌曲已变化，音频未替换。', 'RMT_MV_AUDIO')); return; }
+                mv.patchRecord(target.songId, { duration }, target);
             }
             catch (error) { finish(false, error); return; }
             const old = audioBySong.get(key);
             if (isView(opened) && audioKey() === key) { stopPlayback(); player.audio = null; }
             audioBySong.set(key, { url, name: core_text.normalizeText(name, 80), duration, target, sourceUrl: details.sourceUrl || '', streaming, fromVideo });
             if (old) { try { URL.revokeObjectURL(old.url); } catch {} }
-            if (persist) void mv_media.putMedia(key, streaming ? null : blob, name, { ...details, ...(streaming ? { mediaUrl: url } : {}) }).then(ok => { if (!ok && isView(opened)) globalThis.toastr?.info?.('这台设备没能记住这首歌，下次打开需要重新选择。', '心迹回廊 · MV'); });
             finish(true);
             if (isView(opened) && audioKey() === key) renderMv();
         };
@@ -409,43 +406,49 @@ function cancelMusicLink() {
     view.musicLinkStatus = '';
 }
 
-async function importMusicLink(value) {
+// Both pages mutate the same song audio through songPlayer. The editor keeps
+// only a disposable playback copy; storage receipts and temporary sources stay
+// in the shared owner, so returning to the song page cannot revive stale audio.
+async function importMusicSource(value, isFile) {
     const opened = viewTarget();
-    if (!isView(opened) || player.exporting) return;
-    let sourceUrl;
-    try { sourceUrl = music_link.musicUrl(value); }
-    catch (error) { view.musicLinkStatus = error.message; renderMv(); return; }
+    if (!isView(opened) || player.exporting) return false;
+    const context = ctx(), key = audioKey();
+    const target = mv.captureMvTarget(context, opened.songId);
+    if (!isFile) {
+        try { value = music_link.musicUrl(value); }
+        catch (error) { view.musicLinkStatus = error.message; renderMv(); return false; }
+    }
     cancelMusicLink();
-    const target = mv.captureMvTarget(ctx(), opened.songId), key = audioKey(target);
-    const controller = new AbortController(), token = { signal: controller.signal };
+    const controller = new AbortController(), token = {};
     audioLoads.get(key)?.cancel?.();
     audioLoads.set(key, token); audioTried.add(key);
     const pending = musicLinkImport = { key, controller, token };
-    view.musicLinkInput = sourceUrl; view.musicLinkStatus = '正在读取音乐…';
+    view.musicLinkInput = isFile ? '' : value;
+    view.musicLinkStatus = isFile ? '正在检查音频…' : '正在读取音乐…';
     renderMv();
-    let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 60000);
     try {
-        const media = await music_link.readMusicLink(sourceUrl, { signal: controller.signal });
-        if (musicLinkImport !== pending || !isView(opened) || controller.signal.aborted) return;
-        view.musicLinkStatus = '正在检查音频…'; renderMv();
-        const ok = await acceptAudio(media.blob || media.url, media.name, true, target, token, { sourceUrl: media.sourceUrl });
+        const options = { signal: controller.signal, isCurrent: () => isView(opened) && mv.isCurrentMvTarget(target) };
+        const ok = await (isFile ? song_player.importSongFile(context, opened.songId, value, options)
+            : song_player.importSongLink(context, opened.songId, value, options));
         if (musicLinkImport === pending && isView(opened)) {
-            view.musicLinkStatus = ok ? `${media.resolvedFrom ? '短链接已换成完整歌曲链接。' : ''}${media.streaming ? '已接入在线音轨，与画面共用播放进度。' : '已导入，与画面共用播放进度。'}` : '音频未能导入，原有歌曲未替换。';
-            if (ok && media.resolvedFrom && media.sourceUrl) view.musicLinkInput = media.sourceUrl;
+            view.musicLinkStatus = song_player.songAudioNote(context, opened.songId);
+            const entry = song_player.currentSongAudio(context, opened.songId);
+            if (ok && entry?.sourceUrl) view.musicLinkInput = entry.sourceUrl;
         }
-    } catch (error) {
-        if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = timedOut ? '音乐读取超时，原有歌曲未替换。' : controller.signal.aborted ? '' : /^RMT_MV_LINK_/.test(error?.code || '') ? String(error.message) : '音乐读取失败，原有歌曲未替换。';
+        return ok;
     } finally {
-        clearTimeout(timer);
         if (musicLinkImport === pending) {
             musicLinkImport = null;
-            if (!audioBySong.has(key)) audioTried.delete(key);
-            if (timedOut && isView(opened)) view.musicLinkStatus = '音乐读取超时，原有歌曲未替换。';
+            if (audioLoads.get(key) === token) {
+                audioLoads.delete(key);
+                if (!audioBySong.has(key)) audioTried.delete(key);
+            }
             if (isView(opened)) renderMv();
         }
     }
 }
+
+function importMusicLink(value) { return importMusicSource(value, false); }
 
 async function removeMusic() {
     const opened = viewTarget(), key = audioKey(), entry = audioBySong.get(key);
@@ -455,23 +458,17 @@ async function removeMusic() {
     audioLoads.set(key, token); audioTried.add(key);
     view.audioStatus = '正在移除音源…'; renderMv();
     try {
-        if (!await mv_media.deleteMedia(key)) throw core_text.safeUserError('音源未能移除，原有音源保留。', 'RMT_MV_AUDIO_REMOVE');
-        // A newer import or another song must not be cleared by this completion.
-        if (audioLoads.get(key) !== token || audioBySong.get(key) !== entry) return;
-        if (isView(opened)) {
-            const time = currentTime(); stopPlayback();
-            try { player.audio?.removeAttribute?.('src'); player.audio?.load?.(); } catch {}
-            player.audio = null; player.clockOffset = time;
+        if (!await song_player.removeSongAudio(ctx(), opened.songId)) throw core_text.safeUserError('音源未能移除，原有音源保留。', 'RMT_MV_AUDIO_REMOVE');
+        // The shared audio event invalidates both players after a confirmed
+        // deletion (or an explicitly temporary removal), never before it.
+        if (isView(opened) && !song_player.currentSongAudio(ctx(), opened.songId)) {
             view.musicLinkInput = ''; view.musicLinkStatus = '';
         }
-        audioBySong.delete(key); URL.revokeObjectURL(entry.url);
     } catch (error) {
         if (isView(opened) && audioLoads.get(key) === token) toastError(error);
     } finally {
-        if (audioLoads.get(key) === token) {
-            audioLoads.delete(key);
-            if (isView(opened)) { view.audioStatus = ''; renderMv(); }
-        }
+        if (audioLoads.get(key) === token) audioLoads.delete(key);
+        if (isView(opened)) { view.audioStatus = ''; renderMv(); }
     }
 }
 
@@ -2313,7 +2310,7 @@ export function handleMvChange(event) {
     }
     if (input?.matches?.('[data-rmt-mv-audio]')) {
         const file = input.files?.[0];
-        if (file) { input.value = ''; cancelMusicLink(); view.musicLinkInput = ''; void acceptAudio(file, file.name, true); }
+        if (file) { input.value = ''; void importMusicSource(file, true).catch(toastError); }
         return true;
     }
     if (input?.matches?.('[data-rmt-mv-image]')) {

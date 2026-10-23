@@ -702,13 +702,13 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
         }
         if (commitCompletedOnly) {
             globalThis.toastr?.success?.('已将成功分段入档，未完成部分仍保留；继续时不会重做已入档分段。', '心迹回廊');
-            return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred' };
+            return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred', archiveRevision: memoryBank.archiveRevision };
         }
         const added = Math.max(0, memories.length - (incrementalUpdate ? existing.memories.length : 0));
         const rollingNotice = archive_capacity.capacityNotice(admitted);
         globalThis.toastr?.success?.(core_text.toastText(`${progress && archive_batches.hasPendingBatches(memoryBank[archive_batches.IMPORT_PROGRESS_KEY]) ? `【${archive_coverage.OPERATION_KIND_LABEL[operationKind]}】${capacityPending.length ? '本批部分结果入档，余下结果待入档' : '本批已保存，后续批次待点击'}` : `${actionLabel}完成`}：${memoryBank.archiveName} · 当前热位 ${memories.length} 条${memoryBank.coldArchive?.length ? ` · 冷归档 ${memoryBank.coldArchive.length}` : ''}${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${!core_context.isCurrentTaskOrigin(origin) ? '（待回到原窗口写入，尚未正式保存）' : ''}`), '心迹回廊');
         if (rollingNotice) globalThis.toastr?.info?.(rollingNotice, '心迹回廊 · 容量');
-        return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred' };
+        return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred', archiveRevision: memoryBank.archiveRevision };
     } catch (error) {
         const cancelled = isArchiveCancellation(error);
         if (chunkInFlight) core_taskTrace.markChunks(taskTrace, {

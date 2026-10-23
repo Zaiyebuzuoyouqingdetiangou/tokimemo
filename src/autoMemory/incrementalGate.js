@@ -259,7 +259,7 @@ export async function runAutoMemoryRound(input, io) {
     const after = await io.readMemoryIds();
     const fresh = auto_memory_draw.newMemoryIds(input.memoryIds, after);
     if (!fresh.length) return persistNoop(snapshot, input.floor, io, input.now, 'no-new-memory', floorWindow);
-    return drawFresh(snapshot, fresh, input, io);
+    return drawFresh(snapshot, fresh, { ...input, archiveRevision: imported?.archiveRevision || input.archiveRevision }, io);
 }
 
 export async function drawKnownMemories(input, io) {

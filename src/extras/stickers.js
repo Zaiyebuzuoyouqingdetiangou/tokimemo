@@ -332,8 +332,9 @@ export const writeStickerLore = sticker_lore.writeStickerLore;
 export const removeStickerLore = sticker_lore.removeStickerLore;
 export const refreshStickerLore = sticker_lore.refreshStickerLore;
 
-export async function saveStickerData(data, context = raw()) {
-    const saved = await store.writeStickerData(data, context);
+export async function saveStickerData(data, context = raw(), options = {}) {
+    const saved = await store.updateStickerData(typeof data === 'function' ? data : () => data, context, options);
+    if (!saved) return null;
     try { await refreshStickerLore(context); } catch (error) { console.warn('[HeartbeatMemories] sticker lorebook refresh failed', error?.message); }
     return store.readStickerData(context) || saved;
 }

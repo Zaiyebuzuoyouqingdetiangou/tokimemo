@@ -212,12 +212,18 @@ function sourceChips(ids, fallback) {
     return ids?.length ? `<div class="rmt-x-chips">${ids.map((id, i) => `<span class="rmt-x-chip">${i ? '' : '依据 '}${esc(id)}</span>`).join('')}</div>` : `<div class="rmt-x-chips"><span class="rmt-x-chip muted">${esc(fallback)}</span></div>`;
 }
 
+function intelSourceChips(section) {
+    if (section.evidenceState === 'unverified') return sourceChips([], '旧情报 · 依据未核实');
+    if (section.evidenceState === 'verified') return sourceChips(section.sourceMemoryIds, '依据未核实');
+    return sourceChips([], section.kind === 'advice' ? '建议 · 不写入档案' : '生活设定');
+}
+
 function renderIntel() {
     chrome('朋友情报', '人际庭园');
     const context = currentContext();
     if (!context || readOnlyTarget()) return emptyPage('朋友情报', '朋友情报只在当前聊天里使用。请回到当前聊天，从人际庭园打开。');
-    let people = [];
-    try { archive_repository.requireArchive(context); people = extras_intel.intelPeople(context); }
+    let people = [], memory = null;
+    try { memory = archive_repository.requireArchive(context); people = extras_intel.intelPeople(context); }
     catch { return emptyPage('朋友情报', '先为当前聊天建立档案，再生成人际庭园。', '<button type="button" class="rmt-btn" data-rmt-workspace-tab="archive">前往当前档案</button>'); }
     if (!people.length) return emptyPage('朋友情报', '人际庭园里还没有可以打听的人。先生成或刷新人际庭园。', '<button type="button" class="rmt-btn" data-rmt-extra="intel-garden">打开人际庭园</button>');
     if (!people.some(p => p.name === view.person)) view.person = people[0].name;
@@ -225,11 +231,12 @@ function renderIntel() {
     const extras = extras_store.readExtras(context);
     const current = people.find(p => p.name === view.person);
     const running = extras_intel.isIntelRunning(scope, current.key);
-    const record = extras.intel.find(item => item.id === view.recordId) || extras.intel.find(item => item.person === current.name) || null;
+    const record = extras_intel.intelRecordForDisplay(
+        extras.intel.find(item => item.id === view.recordId) || extras.intel.find(item => item.person === current.name) || null, memory);
     const labels = { mention: '他提起你的样子', seen: `${record?.person || current.name}看到的`, advice: '悄悄话' };
     const result = record ? `<section class="rmt-x-paper">
         <div class="rmt-x-paper-head">${avatar(record.person, 40)}<div><b>${esc(record.person)}的情报</b><small>${esc(record.scene || new Date(record.createdAt).toLocaleDateString('zh-CN'))}</small></div></div>
-        ${record.sections.map((section, index) => `${index ? '<hr>' : ''}<div class="rmt-x-sec"><small>${esc(labels[section.kind] || '')}</small><p>${esc(section.text)}</p>${section.kind === 'advice' ? '<div class="rmt-x-chips"><span class="rmt-x-chip muted">建议 · 不写入档案</span></div>' : sourceChips(section.sourceMemoryIds, '生活设定')}</div>`).join('')}
+        ${record.sections.map((section, index) => `${index ? '<hr>' : ''}<div class="rmt-x-sec"><small>${esc(labels[section.kind] || '')}</small><p>${esc(section.text)}</p>${intelSourceChips(section)}</div>`).join('')}
       </section>` : `<section class="rmt-x-card"><p class="rmt-x-note">还没向${esc(current.name)}打听过。</p></section>`;
     const history = extras.intel.slice(0, 12).map(item => `<button type="button" class="rmt-x-list-row" data-rmt-extra="intel-record" data-rmt-extra-id="${esc(item.id)}">${avatar(item.person, 36)}<span><b>${esc((item.sections[0]?.text || '').slice(0, 22))}${(item.sections[0]?.text || '').length > 22 ? '…' : ''}</b><small>${esc(item.person)} · ${esc(new Date(item.createdAt).toLocaleDateString('zh-CN'))}</small></span><i aria-hidden="true">›</i></button>`).join('');
     const el = body(); if (!el) return;

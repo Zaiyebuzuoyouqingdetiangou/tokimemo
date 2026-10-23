@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 364
-// Source SHA-256: b320caa210e2a4c138ab13c28e9974484dba5d8cc62f8fe7bb920f1cbf21e53b
+// Source modules: 365
+// Source SHA-256: 11f942fb46f3e5570a717e346b1f033fe2fa3188d481fd6740831c6ea66bcaa9
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -58,6 +58,7 @@ const __m_autoMemory_moduleRegistry_js = Object.create(null);
 const __m_autoMemory_moduleRunner_js = Object.create(null);
 const __m_autoMemory_planStore_js = Object.create(null);
 const __m_autoMemory_redo_js = Object.create(null);
+const __m_autoMemory_roundContext_js = Object.create(null);
 const __m_autoMemory_scheduler_js = Object.create(null);
 const __m_autoMemory_shellState_js = Object.create(null);
 const __m_autoMemory_streamGate_js = Object.create(null);
@@ -1805,7 +1806,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.58\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 印象曲页新增「听这首歌」播放器：在 Suno 做好歌后，把歌曲链接粘回来（或选本机音频文件），就能直接在页面里听；制作手书时也直接用这首，不用再导一次。音源只存在这台设备上。\n- 播放器是唱片样式：播放时黑胶唱片从封套里滑出来转动，进度条可以拖动。导入链接、选择文件、移除音源都收在「更换音源」里。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 情侣头像选 NAI 4.5 时：两人外貌里写明了性别，会自动加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；外貌还是整句或中文写法时，外貌栏下会提示，点生成前也会问要不要先整理成英文 tag。\n- 柏宝绘角色库：名字写成 {{user}} / {{char}} 的条目也能对上当前的你和角色；名字只差全角半角、首尾空格或大小写也能对上，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌来自柏宝绘角色库的哪一条；没对上会说明原因（库里没有这个名字、有两条都对上、只写了衣着动作，或柏宝绘版本太旧）。\n- 修复图片设置里点了「保存外貌」、关掉再打开还是旧外貌的问题：现在会显示你上次保存的外貌，确认绘图后就用新外貌重画；这张图原来的记录不会被改。\n- 图片设置里「重新构思／提取外貌」整理出的外貌更完整：人设里写明的性别、发型、眼色、脸部特征、身高体型、配饰等都会保留，不再压成几个概括词。外貌栏能写的长度从 400 字放宽到 1200 字，自己手写的外貌按原样保存。\n- 修复用酒馆连接配置生成时总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走，不容易再被中转站掐断而出现「生成连接请求失败」。如果仍是完整响应、30 秒没收到数据就断开，提示会告诉你去「高级生成参数」改成「使用流式」。\n- 「内容」页「把勾选的项目排进任务中心」旁边多了「全选」。\n- 修复本地快速建档可能盖掉旧档案内容的问题：复制、分支或改名后的聊天里，旧档案一时读不到时，自动建档会以为“没有档案”而新建一份。现在只要聊天里留有旧档案、已生成内容、档案索引或本机备份的任何痕迹，自动建档和「本地快速建档」都不会新建。\n- 新建档案和完全重建前，会先显示这次要读多少层、大约多少字、预计几次请求、分几批。如果有标签占了很大一部分字数（比如其他插件写进聊天的旧总结），会列出来让你勾选不读；特别长的楼层也会单独列出来，并显示里面的开头，方便判断是不是旧总结。\n- 修复长聊天建档时反复提示「本批草稿尚未确认保存到本机」、点保存也没用的问题：聊天很长时这批草稿也很大，手机存进本机要好几秒，以前超过 5 秒就当作失败；现在按草稿大小放宽等待时间（最长 2 分钟），真的没存完也会说明是存得太慢。\n- 修复改过角色卡之后，这个聊天的建档、更新、继续、导出、丢弃全部报「本机草稿读取未完成」、什么都点不了的问题。\n- 档案不再在聊天文件里长期留着整份聊天原文的副本：建档完成后和每次「另起任务」都不会再额外占一份，聊天文件不会越用越大；暂停的旧草稿也会自动精简（还有没保存成果的草稿不动）。\n- 长聊天建档时手机卡顿明显减少；本机草稿保存超时但其实已经存进去时，不再导致之后每次保存都失败。\n- 流式生成改成「多久没收到新内容」才算超时，模型慢慢写长回复不会再在 3 分钟被掐断；真卡住时，已收到的内容会留成草稿，可以接着生成。\n- 模型回复的 JSON 有多余逗号、中文引号、注释、字符串里换行这类小毛病时，会先自动修补再读取，不用重新付费生成；回复格式小错不再被当成截断而自动付费续写。\n- 带思考过程标签的正常回复不再被误判成「返回了 HTML 页面」，真正的代理错误页仍会被拦下；推理把额度用完、回复为空时不再自动再付费重试。\n- 任务中心里属于其他聊天的「第二次生成」按钮不再对当前聊天生效。\n- 表情包：一组里有一张没画好，已经画好的会保留，只补画缺的；点「停止等待」后，正在画的那张画完也会留下；保存时切换了角色不会写错卡；保存和单张重画防双击。\n- 智绘姬：取消后，在它真正画完之前不会让你重复提交；画成功但返回的是图片链接时会自动存下来，不会当成失败再用另一个生图插件付费重画。柏宝绘画好但没存进图库时也会自动存下来。\n- CG 发给智绘姬时会明确带上横图或竖图尺寸（按你在智绘姬里设置的尺寸调换方向，正方形尺寸不动），不会沿用上一次请求的尺寸；歌曲封面和多格日常漫画按竖图发。\n- 情侣头像：生成防双击，可以「停止等待」；历史页缩略图更省内存。\n- 手机更流畅：自动记忆的信件不再每 2 秒整个重算，打开的信件不再反复重画（长按复制不会被打断）；聊天头像不再每条消息都从存储重新读取，也不再占用酒馆共用的本地存储（旧数据自动迁移）；没有自动记忆计划时不再往聊天页面塞大段样式；流式输出时头像和表情包不再反复全量扫描；印象曲音频关掉后释放内存。\n- 只用新版自动记忆计划的聊天，切换过去时也会自动唤醒，不用先手动打开一次档案。\n- 表情包用 NAI 4.5 画时改用它更擅长的 tag 写法（白底、几行几列、留空隙），其他模型的写法不变；切图也更聪明了：奶油色、粉色或渐变的底也能按形状切开，多画了几个时只留最大的几个而不是把两个粘在一起，排列和要求不一样时按图上真实的空隙切。\n- 修复情侣头像「调整裁切」里左右移动没反应的问题：以前裁切框被限制在自己那一半，放大为 1 时一点都动不了；现在左右两边都能在整张图上左右移动，可以越过中线把人物放到正中。以前保存过的裁切位置不变。\n- 邮箱信末小画换了画法：新信不再让模型自己画 SVG（画出来太抽象），改回以前插件本地画的小画（小马、小猫、兔子、花、茶杯、书等）。接了柏宝绘或智绘姬时，会按这封信的情节在后台画一张彩铅简笔画放在信末，画好之前和没画成时先显示本地小画，没画成还能点「用生图插件重画小画」。邮箱顶部可以开关「信末小画用生图插件画」。写信时顺带写好画面描述，不额外调用文字模型；每封信多一次生图。以前的信照原样显示。\n- 修复：自动留忆出过一封信后，再往下聊时那封信会变成「留忆 还差几层」的提示，之后的楼层也不再显示留忆。现在信留在出信那一楼，倒计时跟着最新一楼走。\n- 设置「界面主题」里新增「字体大小」：可以把心迹回廊自己界面的字调小或调大（80%–125%，默认 100%），主界面、弹窗和聊天楼层里的信封一起变，不影响酒馆聊天正文。\n- 其他已有功能保持不变。\n";
+const RELEASE_README = "# 心迹回廊 1.0.61\n\n## 本次修复\n\n- 「本页人物」不再因档案更新而重置为「沿用档案人物」。同一档案持续保留各页的选择方式和指定人物，并在能够明确归属时找回本机旧设置；删除后新建的档案独立保存。指定一人时，蝴蝶效应的新一轮生成使用该人物，不再意外带入整份名单。\n- 人物选择写入失败时，本次打开仍使用刚选的设置，并提示刷新后需要重新选择。选中人物已从档案移除时要求重新选择，不自动扩成全部人物。\n- 手书与印象曲共用音源状态：在手书里更换或移除后，返回歌曲页立即生效；本机暂存的音源也能用于手书，并能在设备存储不可用时移除。保存失败保留已保存音源，取消、切换聊天及导入途中歌曲变化均有保护。\n- 表情包新建世界书使用独立名称，不再把读取失败的同名旧书当成空书。世界书没有可靠保存回执时明确标记「保存未确认」，撤除也保留待确认状态和重试入口；不再假报已经保存或撤除。\n- 表情包写角色卡核对宿主保存回执；旧宿主通过重新读取确认。无法确认时仍显示上次确认的插件内容并提示重试，避免乐观缓存冒充保存成功。\n- 自动留忆的成就和手帐批注只由本次任务接收，并发的手动生成或其他自动步骤不会借用、覆盖或清除；完成、失败和取消后分别清理。\n- 「本页人物」新增「按档案剧情出场」：只写档案记忆里已经出场过的人物，建档时勾了、但剧情里还没登场的人不会被写进去；档案更新后自动跟着变。选择方式下面会写清每种方式的区别，选这一项时会列出现在找到的人物。\n\n已经生成的旧内容保留，不会自动改写或发起付费请求。人物设置用于之后明确发起的新一轮生成；继续旧任务仍沿用其原有快照。\n\n## 1.0.60 更新记录\n\n## 本次修复\n\n- 多张角色卡共用世界书时，表情包规则分别保存，只更新和撤掉本角色可确认归属的条目；同一本世界书的保存依次进行，避免互相覆盖。\n- 设备暂时无法保存音源时，仍可更换或移除本次打开期间的临时音源；已经保存的歌曲在存储失败时继续保留。\n- 归属不明的旧表情包条目保留原文，并在操作结果中提示检查；不改写既有聊天、档案和生成提示词。\n\n## 1.0.59 更新记录\n\n## 本次修复\n\n- 自动留忆整轮绑定发起时的聊天和档案版本；切换聊天、取消或停用后，后续步骤不会借用另一个聊天继续生成。\n- 自动留忆连续运行超过 40 轮也能继续；移除误用于持久历史的条数限制，保留已经生成的信件、成就和回看内容。\n- 保存单方外貌后，另一方仍可从原人设提取；清空手填外貌后也能重新提取。\n- 印象曲导入支持完整取消：停止、移除或换入新音源后，旧导入不会晚到并覆盖结果。\n- 连续修改贴图名称、含义或图片时按字段合并保存；迟到的重画和世界书同步不会把新编辑改回旧值。\n- 更新遇到网络、认证、JSON 或普通服务器错误时会停止并提示；只有明确的 Git 本地文件冲突才保留 main 分支原有的覆盖安装路径。\n- 模型回复最后一段 JSON 截断时，不再把前面的完整示例当作最终成果保存；正常的小格式修补仍可使用。\n- 情报中声称已发生的共同往事需要有效档案引用和可核对原文；旧情报仍可查看，依据无法核实的会明确标注。\n\n## 1.0.58 更新记录\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 印象曲页新增「听这首歌」播放器：在 Suno 做好歌后，把歌曲链接粘回来（或选本机音频文件），就能直接在页面里听；制作手书时也直接用这首，不用再导一次。音源只存在这台设备上。\n- 播放器是唱片样式：播放时黑胶唱片从封套里滑出来转动，进度条可以拖动。导入链接、选择文件、移除音源都收在「更换音源」里。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 情侣头像选 NAI 4.5 时：两人外貌里写明了性别，会自动加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；外貌还是整句或中文写法时，外貌栏下会提示，点生成前也会问要不要先整理成英文 tag。\n- 柏宝绘角色库：名字写成 {{user}} / {{char}} 的条目也能对上当前的你和角色；名字只差全角半角、首尾空格或大小写也能对上，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌来自柏宝绘角色库的哪一条；没对上会说明原因（库里没有这个名字、有两条都对上、只写了衣着动作，或柏宝绘版本太旧）。\n- 修复图片设置里点了「保存外貌」、关掉再打开还是旧外貌的问题：现在会显示你上次保存的外貌，确认绘图后就用新外貌重画；这张图原来的记录不会被改。\n- 图片设置里「重新构思／提取外貌」整理出的外貌更完整：人设里写明的性别、发型、眼色、脸部特征、身高体型、配饰等都会保留，不再压成几个概括词。外貌栏能写的长度从 400 字放宽到 1200 字，自己手写的外貌按原样保存。\n- 修复用酒馆连接配置生成时总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走，不容易再被中转站掐断而出现「生成连接请求失败」。如果仍是完整响应、30 秒没收到数据就断开，提示会告诉你去「高级生成参数」改成「使用流式」。\n- 「内容」页「把勾选的项目排进任务中心」旁边多了「全选」。\n- 修复本地快速建档可能盖掉旧档案内容的问题：复制、分支或改名后的聊天里，旧档案一时读不到时，自动建档会以为“没有档案”而新建一份。现在只要聊天里留有旧档案、已生成内容、档案索引或本机备份的任何痕迹，自动建档和「本地快速建档」都不会新建。\n- 新建档案和完全重建前，会先显示这次要读多少层、大约多少字、预计几次请求、分几批。如果有标签占了很大一部分字数（比如其他插件写进聊天的旧总结），会列出来让你勾选不读；特别长的楼层也会单独列出来，并显示里面的开头，方便判断是不是旧总结。\n- 修复长聊天建档时反复提示「本批草稿尚未确认保存到本机」、点保存也没用的问题：聊天很长时这批草稿也很大，手机存进本机要好几秒，以前超过 5 秒就当作失败；现在按草稿大小放宽等待时间（最长 2 分钟），真的没存完也会说明是存得太慢。\n- 修复改过角色卡之后，这个聊天的建档、更新、继续、导出、丢弃全部报「本机草稿读取未完成」、什么都点不了的问题。\n- 档案不再在聊天文件里长期留着整份聊天原文的副本：建档完成后和每次「另起任务」都不会再额外占一份，聊天文件不会越用越大；暂停的旧草稿也会自动精简（还有没保存成果的草稿不动）。\n- 长聊天建档时手机卡顿明显减少；本机草稿保存超时但其实已经存进去时，不再导致之后每次保存都失败。\n- 流式生成改成「多久没收到新内容」才算超时，模型慢慢写长回复不会再在 3 分钟被掐断；真卡住时，已收到的内容会留成草稿，可以接着生成。\n- 模型回复的 JSON 有多余逗号、中文引号、注释、字符串里换行这类小毛病时，会先自动修补再读取，不用重新付费生成；回复格式小错不再被当成截断而自动付费续写。\n- 带思考过程标签的正常回复不再被误判成「返回了 HTML 页面」，真正的代理错误页仍会被拦下；推理把额度用完、回复为空时不再自动再付费重试。\n- 任务中心里属于其他聊天的「第二次生成」按钮不再对当前聊天生效。\n- 表情包：一组里有一张没画好，已经画好的会保留，只补画缺的；点「停止等待」后，正在画的那张画完也会留下；保存时切换了角色不会写错卡；保存和单张重画防双击。\n- 智绘姬：取消后，在它真正画完之前不会让你重复提交；画成功但返回的是图片链接时会自动存下来，不会当成失败再用另一个生图插件付费重画。柏宝绘画好但没存进图库时也会自动存下来。\n- CG 发给智绘姬时会明确带上横图或竖图尺寸（按你在智绘姬里设置的尺寸调换方向，正方形尺寸不动），不会沿用上一次请求的尺寸；歌曲封面和多格日常漫画按竖图发。\n- 情侣头像：生成防双击，可以「停止等待」；历史页缩略图更省内存。\n- 手机更流畅：自动记忆的信件不再每 2 秒整个重算，打开的信件不再反复重画（长按复制不会被打断）；聊天头像不再每条消息都从存储重新读取，也不再占用酒馆共用的本地存储（旧数据自动迁移）；没有自动记忆计划时不再往聊天页面塞大段样式；流式输出时头像和表情包不再反复全量扫描；印象曲音频关掉后释放内存。\n- 只用新版自动记忆计划的聊天，切换过去时也会自动唤醒，不用先手动打开一次档案。\n- 表情包用 NAI 4.5 画时改用它更擅长的 tag 写法（白底、几行几列、留空隙），其他模型的写法不变；切图也更聪明了：奶油色、粉色或渐变的底也能按形状切开，多画了几个时只留最大的几个而不是把两个粘在一起，排列和要求不一样时按图上真实的空隙切。\n- 修复情侣头像「调整裁切」里左右移动没反应的问题：以前裁切框被限制在自己那一半，放大为 1 时一点都动不了；现在左右两边都能在整张图上左右移动，可以越过中线把人物放到正中。以前保存过的裁切位置不变。\n- 邮箱信末小画换了画法：新信不再让模型自己画 SVG（画出来太抽象），改回以前插件本地画的小画（小马、小猫、兔子、花、茶杯、书等）。接了柏宝绘或智绘姬时，会按这封信的情节在后台画一张彩铅简笔画放在信末，画好之前和没画成时先显示本地小画，没画成还能点「用生图插件重画小画」。邮箱顶部可以开关「信末小画用生图插件画」。写信时顺带写好画面描述，不额外调用文字模型；每封信多一次生图。以前的信照原样显示。\n- 修复：自动留忆出过一封信后，再往下聊时那封信会变成「留忆 还差几层」的提示，之后的楼层也不再显示留忆。现在信留在出信那一楼，倒计时跟着最新一楼走。\n- 设置「界面主题」里新增「字体大小」：可以把心迹回廊自己界面的字调小或调大（80%–125%，默认 100%），主界面、弹窗和聊天楼层里的信封一起变，不影响酒馆聊天正文。\n- 其他已有功能保持不变。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -1818,16 +1819,43 @@ const store = __m_core_stickerStore_js;
 // already written entry current after an update, without the full runtime.
 
 const text = value => typeof value === 'string' ? value.trim() : '';
+const LORE_WRITES = Symbol.for('Hearttrace.stickerLoreWrites.v1');
+const BOOK_WRITES = Symbol.for('Hearttrace.stickerBookWrites.v1');
+const OWNER_FIELD = 'hearttraceStickerOwner';
+function queue(symbol, key, action) {
+    const queues = globalThis[symbol] || (globalThis[symbol] = new Map());
+    const pending = (queues.get(key) || Promise.resolve()).catch(() => {}).then(action);
+    queues.set(key, pending);
+    pending.finally(() => { if (queues.get(key) === pending) queues.delete(key); }).catch(() => {});
+    return pending;
+}
+function queueLore(context, action) {
+    const scope = store.stickerScope(context), id = context?.characterId;
+    const assertTarget = () => {
+        if (!scope || context?.characterId !== id || store.stickerScope(context) !== scope) {
+            throw safeError('角色已改变，本次世界书操作已停止。', 'RMT_STICKER_CHANGED');
+        }
+    };
+    return queue(LORE_WRITES, scope, () => { assertTarget(); return action(assertTarget); });
+}
+function filterName(context) {
+    const card = context?.characters?.[context?.characterId];
+    return text(card?.avatar || card?.data?.avatar).replace(/\.[^/.]+$/, '');
+}
 function safeError(message, code) { return Object.assign(new Error(message), { code, safeToDisplay: true, safeUserMessage: message }); }
 function raw() { return globalThis.SillyTavern?.getContext?.() || null; }
 function primaryBook(context) {
-    const card = context?.characters?.[context?.characterId];
-    return text(card?.data?.extensions?.world);
+    return text(store.readStickerField('world', context));
 }
 function loreState(data, context = raw()) {
     const book = primaryBook(context), content = store.stickerLoreContent(data, context);
-    const written = !!data.lore.book && data.lore.book === book;
-    return { book, written, content, stale: written && data.lore.hash !== store.loreHash(content), empty: !content };
+    const tracked = !!data.lore.book && data.lore.book === book, written = tracked && !data.lore.removed;
+    const unconfirmed = tracked && data.lore.unconfirmed === true;
+    // A submitted hash deduplicates unchanged work; it is never proof of a
+    // durable host save. Keep removed submissions inactive until an explicit write.
+    const comparedHash = unconfirmed ? data.lore.submittedHash : data.lore.hash;
+    return { book, tracked, written, unconfirmed, removed: tracked && !!data.lore.removed, content,
+        stale: written && comparedHash !== store.loreHash(content), empty: !content };
 }
 
 // Field-for-field the same as SillyTavern's own new entry (world-info.js
@@ -1861,10 +1889,38 @@ function loreEntry(data, context) {
     return { comment: store.LORE_COMMENT, content: store.stickerLoreContent(data, context),
         fresh: { constant: true, ...LORE_PLACEMENT, order: 100, addMemo: true, excludeRecursion: true, preventRecursion: true, triggers: [...REPLY_TRIGGERS] },
         // Small, and useless if the World Info budget drops it: never let the budget cut it.
-        owned: { ignoreBudget: true } };
+        owned: { ignoreBudget: true, [OWNER_FIELD]: store.stickerScope(context),
+            characterFilter: { names: [filterName(context)], tags: [], isExclude: false } } };
 }
-function findEntry(book, comment) {
-    return Object.entries(book?.entries || {}).find(([, entry]) => entry?.comment === comment) || null;
+function ownedEntries(book, comment, data, context, name) {
+    const scope = store.stickerScope(context), filter = filterName(context);
+    const rows = Object.entries(book?.entries || {}).filter(([, entry]) => entry?.comment === comment);
+    const owned = rows.filter(([, entry]) => entry[OWNER_FIELD] === scope);
+    if (owned.length) return owned;
+    // Older entries have no owner. Never claim a foreign/excluded/shared filter.
+    // Unfiltered legacy data is adopted only with an exact local receipt and a
+    // single card binding this book. Ambiguous records remain untouched.
+    if (data.lore.book !== name || !data.lore.hash || comment !== store.LORE_COMMENT) return [];
+    const content = store.stickerLoreContent(data, context);
+    const boundCards = (context.characters || []).filter(card => text(card?.data?.extensions?.world) === name);
+    return rows.filter(([, entry]) => {
+        if (entry[OWNER_FIELD] || entry.content !== content || store.loreHash(entry.content) !== data.lore.hash) return false;
+        const gate = entry.characterFilter;
+        if (gate) return gate.isExclude === false && Array.isArray(gate.names) && gate.names.length === 1
+            && gate.names[0] === filter && (!gate.tags || Array.isArray(gate.tags) && gate.tags.length === 0);
+        return boundCards.length === 1 && boundCards[0] === context.characters[context.characterId];
+    });
+}
+function hasLegacyEntries(book) {
+    return Object.values(book?.entries || {}).some(entry => !entry?.[OWNER_FIELD]
+        && [store.LORE_COMMENT, store.LORE_NUDGE_COMMENT].includes(entry?.comment));
+}
+function readError() {
+    return safeError('未能读取原世界书，已停止操作。请检查世界书或重新选择主世界书后重试。', 'RMT_STICKER_LORE_READ');
+}
+function validBook(book) {
+    return !!book && typeof book === 'object' && !Array.isArray(book)
+        && !!book.entries && typeof book.entries === 'object' && !Array.isArray(book.entries);
 }
 async function saveBook(context, name, book) {
     await context.saveWorldInfo(name, book, true);
@@ -1874,75 +1930,125 @@ async function saveBook(context, name, book) {
 
 // Append or update one entry in the character's own lorebook. When the card has
 // none yet, make one named after the character and bind it as primary.
-async function writeStickerLore(context = raw()) {
+async function writeStickerLoreNow(context, assertTarget) {
     if (typeof context?.loadWorldInfo !== 'function' || typeof context?.saveWorldInfo !== 'function') {
         throw safeError('这个酒馆版本不能从插件写世界书，请更新酒馆后再试。', 'RMT_STICKER_LORE_HOST');
     }
-    const data = store.readStickerData(context);
-    if (!store.stickerLoreContent(data, context)) throw safeError('还没有表情，先做一组再写进世界书。', 'RMT_STICKER_LORE_EMPTY');
-    let name = primaryBook(context), created = false;
-    if (!name) {
-        name = `${store.ownerLabel('char', context)}的表情包`.replace(/[\\/:*?"<>|]/gu, '');
-        const existing = await Promise.resolve(context.loadWorldInfo(name)).catch(() => null);
-        await context.saveWorldInfo(name, existing?.entries ? existing : { entries: {} }, true);
-        await context.writeExtensionField(context.characterId, 'world', name);
-        const card = context.characters[context.characterId];
-        card.data = card.data || {}; card.data.extensions = card.data.extensions || {}; card.data.extensions.world = name;
-        created = true;
-    }
-    const book = await context.loadWorldInfo(name) || { entries: {} };
-    book.entries = book.entries && typeof book.entries === 'object' ? book.entries : {};
-    const template = await entryTemplate();
-    const spec = loreEntry(data, context), found = findEntry(book, spec.comment);
-    if (found) {
-        // Fill fields an older 心迹回廊 left out; keep the user's own edits.
-        const current = { ...structuredClone(template), ...found[1] };
-        if (!Array.isArray(found[1].triggers)) current.triggers = [...REPLY_TRIGGERS];
-        // Still where an earlier 心迹回廊 put it (after the character card): move it near the latest messages.
-        if (found[1].position === 1 && (found[1].depth ?? 4) === 4) Object.assign(current, LORE_PLACEMENT);
-        if (current.useProbability && current.probability !== 100 && found[1].comment === store.LORE_COMMENT) current.probability = 100;
-        book.entries[found[0]] = { ...current, content: spec.content, ...spec.owned };
-    } else {
-        const uid = freeUid(book.entries);
-        book.entries[uid] = { uid, ...structuredClone(template), ...spec.fresh, ...spec.owned, comment: spec.comment, content: spec.content, displayIndex: uid };
-    }
-    // The per-reply dice entry from an earlier build is no longer used.
-    const nudge = findEntry(book, store.LORE_NUDGE_COMMENT);
-    if (nudge) delete book.entries[nudge[0]];
-    await saveBook(context, name, book);
-    await store.writeStickerData({ ...data, lore: { book: name, hash: store.loreHash(store.stickerLoreContent(data, context)) } }, context);
-    return { book: name, created };
+    if (!filterName(context)) throw safeError('未能确认角色文件，本次世界书操作已停止。', 'RMT_STICKER_CHANGED');
+    const originalBook = primaryBook(context);
+    // The host cannot prove absence: both its read and list refresh can silently
+    // fail. A new destination gets its own unique name, never an existing shared
+    // human-readable name inferred to be empty from a stale list.
+    const name = originalBook || `${store.ownerLabel('char', context)}的表情包-${store.newStickerId('hb')}`.replace(/[\\/:*?"<>|]/gu, '');
+    // A book can belong to several cards. Lock its entire read-modify-save,
+    // including creation, across bootstrap/runtime copies and character queues.
+    return queue(BOOK_WRITES, name, async () => {
+        const assertBook = () => {
+            assertTarget();
+            if (primaryBook(context) !== originalBook) throw safeError('主世界书已改变，本次操作已停止。', 'RMT_STICKER_CHANGED');
+        };
+        assertBook();
+        const data = store.readStickerData(context);
+        if (!store.stickerLoreContent(data, context)) throw safeError('还没有表情，先做一组再写进世界书。', 'RMT_STICKER_LORE_EMPTY');
+        // A failed read is never an empty book. Clone so a failed save cannot
+        // mutate a host-owned cache object through the read result.
+        let loaded = await context.loadWorldInfo(name);
+        assertBook();
+        if (!originalBook) {
+            // Even a known collision in the generated name is never overwritten.
+            const names = context.getWorldInfoNames?.();
+            if (loaded != null || Array.isArray(names) && names.includes(name)) throw readError();
+            loaded = { entries: {} };
+        }
+        if (!validBook(loaded)) throw readError();
+        const book = structuredClone(loaded);
+        const template = await entryTemplate();
+        assertBook();
+        const spec = loreEntry(data, context), found = ownedEntries(book, spec.comment, data, context, name)[0];
+        if (found) {
+            const current = { ...structuredClone(template), ...found[1] };
+            if (!Array.isArray(found[1].triggers)) current.triggers = [...REPLY_TRIGGERS];
+            if (found[1].position === 1 && (found[1].depth ?? 4) === 4) Object.assign(current, LORE_PLACEMENT);
+            if (current.useProbability && current.probability !== 100) current.probability = 100;
+            book.entries[found[0]] = { ...current, content: spec.content, ...spec.owned };
+        } else {
+            const uid = freeUid(book.entries);
+            book.entries[uid] = { uid, ...structuredClone(template), ...spec.fresh, ...spec.owned, comment: spec.comment, content: spec.content, displayIndex: uid };
+        }
+        for (const [uid] of ownedEntries(book, store.LORE_NUDGE_COMMENT, data, context, name)) delete book.entries[uid];
+        const legacyPreserved = hasLegacyEntries(book);
+        assertBook();
+        await saveBook(context, name, book);
+        assertBook();
+        if (!originalBook) {
+            await store.writeConfirmedStickerField('world', name, context);
+            assertTarget();
+            if (primaryBook(context) !== name) {
+                throw safeError('主世界书已改变，新建的书已保留，没有替换当前选择。', 'RMT_STICKER_CHANGED');
+            }
+        }
+        const hash = store.loreHash(spec.content);
+        // saveWorldInfo resolves even on HTTP errors. Record the submission
+        // separately instead of presenting an unacknowledged write as saved.
+        await store.updateStickerData(current => ({ ...current, lore: { book: name, hash: '', submittedHash: hash, unconfirmed: true, legacyPreserved } }), context);
+        return { book: name, created: !originalBook, legacyPreserved, unconfirmed: true };
+    });
 }
 
-async function removeStickerLore(context = raw()) {
+async function removeStickerLoreNow(context, assertTarget) {
     const data = store.readStickerData(context), name = data.lore.book;
+    let legacyPreserved = false;
+    if (name && (typeof context?.loadWorldInfo !== 'function' || typeof context?.saveWorldInfo !== 'function')) throw readError();
     if (name && typeof context?.loadWorldInfo === 'function') {
-        const book = await context.loadWorldInfo(name);
-        let changed = false;
-        for (const comment of [store.LORE_COMMENT, store.LORE_NUDGE_COMMENT]) {
-            const found = findEntry(book, comment);
-            if (found) { delete book.entries[found[0]]; changed = true; }
-        }
-        if (changed) await saveBook(context, name, book);
+        await queue(BOOK_WRITES, name, async () => {
+            assertTarget();
+            const loaded = await context.loadWorldInfo(name);
+            assertTarget();
+            if (!validBook(loaded)) throw readError();
+            const book = structuredClone(loaded);
+            let changed = false;
+            for (const comment of [store.LORE_COMMENT, store.LORE_NUDGE_COMMENT]) {
+                for (const [uid] of ownedEntries(book, comment, data, context, name)) {
+                    delete book.entries[uid]; changed = true;
+                }
+            }
+            legacyPreserved = hasLegacyEntries(book);
+            // A previous unacknowledged removal may only have changed the host
+            // cache. An explicit retry must submit it again even if no row remains.
+            if (changed || data.lore.unconfirmed) await saveBook(context, name, book);
+            assertTarget();
+        });
     }
-    await store.writeStickerData({ ...data, lore: { book: '', hash: '' } }, context);
+    await store.updateStickerData(current => ({ ...current, lore: name
+        ? { book: name, hash: '', submittedHash: '', unconfirmed: true, removed: true, legacyPreserved }
+        : { book: '', hash: '', legacyPreserved } }), context);
     return name;
 }
 
 // After any edit: keep already written entries current; never create them.
-async function refreshStickerLore(context = raw()) {
-    const data = store.readStickerData(context), state = loreState(data, context);
-    if (!state.written || !state.stale) return false;
-    if (state.empty) { await removeStickerLore(context); return true; }
-    await writeStickerLore(context); return true;
+function writeStickerLore(context = raw()) {
+    return queueLore(context, assertTarget => writeStickerLoreNow(context, assertTarget));
+}
+
+function removeStickerLore(context = raw()) {
+    return queueLore(context, assertTarget => removeStickerLoreNow(context, assertTarget));
+}
+
+function refreshStickerLore(context = raw()) {
+    return queueLore(context, async assertTarget => {
+        const data = store.readStickerData(context), state = loreState(data, context);
+        if (!state.written || !state.stale) return false;
+        if (state.empty) { await removeStickerLoreNow(context, assertTarget); return true; }
+        await writeStickerLoreNow(context, assertTarget); return true;
+    });
 }
 
 
+__m_core_stickerLore_js.primaryBook = primaryBook;
+__m_core_stickerLore_js.loreState = loreState;
 __m_core_stickerLore_js.writeStickerLore = writeStickerLore;
 __m_core_stickerLore_js.removeStickerLore = removeStickerLore;
 __m_core_stickerLore_js.refreshStickerLore = refreshStickerLore;
-__m_core_stickerLore_js.primaryBook = primaryBook;
-__m_core_stickerLore_js.loreState = loreState;
 }
 
 function __init_core_stickerStore_js() {
@@ -2027,7 +2133,10 @@ function normalizeStickerData(value) {
     const chibiFilter = ['auto', 'off'].includes(value?.settings?.chibiFilter) ? value.settings.chibiFilter : '';
     return { version: 1, revision: Math.max(0, Number(value?.revision) || 0), packs,
         settings: { maxOne: value?.settings?.maxOne !== false, ...(chibiFilter ? { chibiFilter } : {}) },
-        lore: { book: text(value?.lore?.book).slice(0, 200), hash: text(value?.lore?.hash).slice(0, 40) } };
+        lore: { book: text(value?.lore?.book).slice(0, 200), hash: text(value?.lore?.hash).slice(0, 40),
+            ...(value?.lore?.unconfirmed === true ? { unconfirmed: true, submittedHash: text(value?.lore?.submittedHash).slice(0, 40) } : {}),
+            ...(value?.lore?.removed === true ? { removed: true } : {}),
+            ...(value?.lore?.legacyPreserved === true ? { legacyPreserved: true } : {}) } };
 }
 
 function characterOf(context) {
@@ -2041,7 +2150,77 @@ function stickerScope(context = rawContext()) {
     return card ? text(card.avatar || card.data?.avatar) || text(context.name2) : '';
 }
 function readStickerData(context = rawContext()) {
-    return normalizeStickerData(characterOf(context)?.data?.extensions?.[STICKER_FIELD]);
+    return normalizeStickerData(readStickerField(STICKER_FIELD, context));
+}
+
+// A legacy host can mutate its card optimistically even when HTTP persistence
+// fails. Keep only this plugin's last confirmed fields visible until a fresh
+// card object or a confirmed retry supplies an authoritative value.
+const UNCONFIRMED_FIELDS = Symbol.for('Hearttrace.stickerUnconfirmedFields.v1');
+function unconfirmedFields() { return globalThis[UNCONFIRMED_FIELDS] || (globalThis[UNCONFIRMED_FIELDS] = new Map()); }
+function fieldKey(context, field) { return JSON.stringify([stickerScope(context), field]); }
+function readStickerField(field, context = rawContext()) {
+    const card = characterOf(context), key = fieldKey(context, field), pending = unconfirmedFields().get(key);
+    if (pending?.card === card) return pending.value;
+    if (pending) unconfirmedFields().delete(key);
+    return card?.data?.extensions?.[field];
+}
+function sameField(a, b) {
+    if (a === b) return true;
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false;
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every(key => Object.hasOwn(b, key) && sameField(a[key], b[key]));
+}
+function saveError(unconfirmed = false, field = STICKER_FIELD) {
+    const message = field === 'world'
+        ? unconfirmed ? '世界书关联已提交，但未能确认。请刷新酒馆后检查主世界书选择。' : '未能保存世界书关联，请检查主世界书选择后重试。'
+        : unconfirmed ? '已提交，但未能确认保存。仍显示上次确认的表情内容，请稍后重试。' : '表情内容未能保存，原内容已保留，请稍后重试。';
+    return Object.assign(new Error(message), { code: unconfirmed ? 'RMT_STICKER_SAVE_UNCONFIRMED' : 'RMT_STICKER_SAVE', safeToDisplay: true, safeUserMessage: message });
+}
+async function writeConfirmedStickerField(field, value, context = rawContext()) {
+    if (![STICKER_FIELD, 'world'].includes(field)) throw saveError();
+    const card = characterOf(context), avatar = text(card?.avatar || card?.data?.avatar), id = context?.characterId;
+    if (!card || !avatar) throw changedTarget();
+    const key = fieldKey(context, field), previous = structuredClone(readStickerField(field, context));
+    const bound = () => context.characterId === id && stickerScope(context) === avatar;
+    const bulk = typeof context.writeExtensionFieldBulk === 'function';
+    if (bulk) {
+        let result;
+        try { result = await context.writeExtensionFieldBulk([avatar], field, value); } catch { throw saveError(false, field); }
+        if (!bound()) throw changedTarget();
+        if (!Array.isArray(result?.updated) || result.updated.length !== 1 || result.updated[0] !== avatar
+            || !Array.isArray(result.failed) || result.failed.length
+            || !Array.isArray(result.skipped) || result.skipped.length) throw saveError(false, field);
+    } else {
+        if (typeof context.writeExtensionField !== 'function') throw saveError(false, field);
+        try { await context.writeExtensionField(id, field, value); } catch { /* A fresh read can still confirm a committed request. */ }
+        if (!bound()) throw changedTarget();
+    }
+    // World selection can be changed by the user outside this plugin's queue.
+    // Even a successful bulk response may arrive after a newer selection and
+    // overwrite the host's local field. Reload through the public API before
+    // confirming the binding, and leave that authoritative object untouched.
+    if (!bulk || field === 'world') {
+        const optimistic = characterOf(context);
+        try { await context.getOneCharacter?.(avatar); } catch { /* Keep the confirmed plugin value below. */ }
+        if (!bound()) throw changedTarget();
+        const refreshed = characterOf(context);
+        if (refreshed === optimistic) {
+            unconfirmedFields().set(key, { card: refreshed, value: previous });
+            throw saveError(true, field);
+        }
+        unconfirmedFields().delete(key);
+        if (!sameField(refreshed?.data?.extensions?.[field], value)) {
+            if (field === 'world') throw changedTarget();
+            throw saveError();
+        }
+        if (field === 'world') return value;
+    }
+    unconfirmedFields().delete(key);
+    const latest = characterOf(context);
+    latest.data = latest.data || {}; latest.data.extensions = latest.data.extensions || {};
+    latest.data.extensions[field] = value;
+    return value;
 }
 
 function ownerLabel(owner, context = rawContext()) {
@@ -2097,17 +2276,47 @@ function setStickerFloat(on, context = rawContext()) {
 function emit(type) {
     try { globalThis.dispatchEvent?.(new CustomEvent(type)); } catch { /* No DOM events in tests. */ }
 }
-async function writeStickerData(value, context = rawContext()) {
+const STICKER_WRITES = Symbol.for('Hearttrace.stickerWrites.v1');
+function writeQueues() {
+    // Chat bootstrap and full runtime can import separate copies of this file.
+    return globalThis[STICKER_WRITES] || (globalThis[STICKER_WRITES] = new Map());
+}
+function changedTarget() {
+    return Object.assign(new Error('角色或表情已变化，这次修改没有覆盖现有内容。'), { code: 'RMT_STICKER_CHANGED', safeToDisplay: true, safeUserMessage: '角色或表情已变化，这次修改没有覆盖现有内容。' });
+}
+
+// Queue changes, not precomputed snapshots. Each change sees the last confirmed
+// card write, including changes made while this operation was waiting.
+function updateStickerData(mutate, context = rawContext(), { isCurrent = null } = {}) {
     const card = characterOf(context);
-    if (!card || typeof context.writeExtensionField !== 'function') throw new Error('请先打开一个单人角色聊天，再保存表情包。');
-    const previous = readStickerData(context);
-    const data = normalizeStickerData({ ...value, revision: Math.max(Date.now(), previous.revision + 1) });
-    await context.writeExtensionField(context.characterId, STICKER_FIELD, data);
-    // Keep the in-memory card current even on hosts that only persist remotely.
-    card.data = card.data || {}; card.data.extensions = card.data.extensions || {};
-    card.data.extensions[STICKER_FIELD] = data;
-    emit(STICKER_EVENTS.changed);
-    return data;
+    if (!card || typeof context.writeExtensionField !== 'function' && typeof context.writeExtensionFieldBulk !== 'function') return Promise.reject(new Error('请先打开一个单人角色聊天，再保存表情包。'));
+    const scope = stickerScope(context), id = context.characterId, queues = writeQueues();
+    // Hosts may refresh the card object after writing; stable character identity
+    // matters, not whether the object instance is the same one we first read.
+    const bound = () => !!characterOf(context) && context.characterId === id && stickerScope(context) === scope;
+    const pending = (queues.get(scope) || Promise.resolve()).catch(() => {}).then(async () => {
+        if (!bound() || (isCurrent && !isCurrent())) throw changedTarget();
+        const previous = readStickerData(context), value = mutate(previous);
+        if (value == null) return null; // Deleted targets are never recreated by late edits.
+        const data = normalizeStickerData({ ...value, revision: Math.max(Date.now(), previous.revision + 1) });
+        if (!bound() || (isCurrent && !isCurrent())) throw changedTarget();
+        await writeConfirmedStickerField(STICKER_FIELD, data, context);
+        if (!bound()) throw changedTarget();
+        // A newer queued edit may now be waiting. Publish this confirmed state
+        // before it reads, even if its own UI has since been closed.
+        const latestCard = characterOf(context);
+        latestCard.data = latestCard.data || {}; latestCard.data.extensions = latestCard.data.extensions || {};
+        latestCard.data.extensions[STICKER_FIELD] = data;
+        emit(STICKER_EVENTS.changed);
+        return data;
+    });
+    queues.set(scope, pending);
+    pending.finally(() => { if (queues.get(scope) === pending) queues.delete(scope); }).catch(() => {});
+    return pending;
+}
+
+function writeStickerData(value, context = rawContext()) {
+    return updateStickerData(() => value, context);
 }
 
 // One constant entry in the character's lorebook: what each sticker means,
@@ -2162,19 +2371,22 @@ function loreHash(content) {
     return content ? h.toString(36) : '';
 }
 
-__m_core_stickerStore_js.writeStickerData = writeStickerData;
+__m_core_stickerStore_js.writeConfirmedStickerField = writeConfirmedStickerField;
 __m_core_stickerStore_js.cleanStickerName = cleanStickerName;
 __m_core_stickerStore_js.safeUrl = safeUrl;
 __m_core_stickerStore_js.newStickerId = newStickerId;
 __m_core_stickerStore_js.normalizeStickerData = normalizeStickerData;
 __m_core_stickerStore_js.stickerScope = stickerScope;
 __m_core_stickerStore_js.readStickerData = readStickerData;
+__m_core_stickerStore_js.readStickerField = readStickerField;
 __m_core_stickerStore_js.ownerLabel = ownerLabel;
 __m_core_stickerStore_js.stickerToken = stickerToken;
 __m_core_stickerStore_js.resolveSticker = resolveSticker;
 __m_core_stickerStore_js.allStickers = allStickers;
 __m_core_stickerStore_js.stickerFloatEnabled = stickerFloatEnabled;
 __m_core_stickerStore_js.setStickerFloat = setStickerFloat;
+__m_core_stickerStore_js.updateStickerData = updateStickerData;
+__m_core_stickerStore_js.writeStickerData = writeStickerData;
 __m_core_stickerStore_js.stickerLoreContent = stickerLoreContent;
 __m_core_stickerStore_js.loreHash = loreHash;
 __m_core_stickerStore_js.STICKER_FIELD = STICKER_FIELD;
@@ -7118,8 +7330,9 @@ const writeStickerLore = sticker_lore.writeStickerLore;
 const removeStickerLore = sticker_lore.removeStickerLore;
 const refreshStickerLore = sticker_lore.refreshStickerLore;
 
-async function saveStickerData(data, context = raw()) {
-    const saved = await store.writeStickerData(data, context);
+async function saveStickerData(data, context = raw(), options = {}) {
+    const saved = await store.updateStickerData(typeof data === 'function' ? data : () => data, context, options);
+    if (!saved) return null;
     try { await refreshStickerLore(context); } catch (error) { console.warn('[HeartbeatMemories] sticker lorebook refresh failed', error?.message); }
     return store.readStickerData(context) || saved;
 }
@@ -10413,6 +10626,7 @@ function __init_ui_songPlayer_js() {
 const mv = __m_extras_mv_js;
 const mv_media = __m_extras_mvMedia_js;
 const music_link = __m_extras_mvMusicLink_js;
+const audio_source = __m_extras_mvAudioSource_js;
 const core_context = __m_core_context_js;
 const core_text = __m_core_text_js;
 // 印象曲页面上的音源：给这首歌放一个播放器，可以粘 Suno 链接或选本机文件。
@@ -10422,9 +10636,15 @@ const core_text = __m_core_text_js;
 
 
 
+
 const AUDIO_CHANGED_EVENT = 'hearttrace:mv-audio-changed';
 const loaded = new Map();     // key → { url, name, streaming, sourceUrl, unsaved? }
 const pending = new Map();    // key → AbortController
+const operations = new Map(); // key → latest import/remove operation
+const committedOperations = new Map(); // key → newest confirmed storage operation
+const unsettledStorage = new Map(); // key → operations still waiting for a storage receipt
+let operationSequence = 0;
+const revisions = new Map();  // invalidates late storage reads
 const status = new Map();     // key → last status text
 const fill = new Map();       // key → full link to show in the input after a short link resolved
 let repaint = null;
@@ -10444,6 +10664,7 @@ function announce(key) {
 }
 
 function remember(key, entry) {
+    revisions.set(key, (revisions.get(key) || 0) + 1);
     const old = loaded.get(key);
     if (old && !old.streaming && old.url !== entry?.url) { try { URL.revokeObjectURL(old.url); } catch {} }
     if (entry) loaded.set(key, entry); else loaded.delete(key);
@@ -10453,127 +10674,222 @@ function remember(key, entry) {
 async function loadSongAudio(context, songId) {
     const key = songAudioKey(context, songId);
     if (loaded.has(key)) return loaded.get(key);
+    const revision = revisions.get(key) || 0;
     const row = await mv_media.getMedia(key);
+    if (revision !== (revisions.get(key) || 0) || loaded.has(key)) return loaded.get(key) || null;
     if (!row?.blob && !row?.mediaUrl) return null;
-    const entry = { url: row.blob ? URL.createObjectURL(row.blob) : music_link.musicUrl(row.mediaUrl), name: row.name || '已保存的歌曲', streaming: !row.blob, sourceUrl: row.sourceUrl || '', artist: row.artist || '', coverUrl: row.coverUrl || '' };
+    const entry = { blob: row.blob || null, url: row.blob ? URL.createObjectURL(row.blob) : music_link.musicUrl(row.mediaUrl), name: row.name || '已保存的歌曲', streaming: !row.blob, sourceUrl: row.sourceUrl || '', artist: row.artist || '', coverUrl: row.coverUrl || '' };
     remember(key, entry);
     return entry;
 }
 
 // Make sure the bytes really decode before keeping them, so a wrong link never
 // becomes a silent track for the MV later.
-function probeAudio(url, { signal } = {}) {
+function probeAudio(url, { signal, requireData = false } = {}) {
     return new Promise((resolve, reject) => {
-        const probe = new Audio(); probe.preload = 'metadata';
+        if (signal?.aborted) { reject(new DOMException('已取消', 'AbortError')); return; }
+        const probe = new Audio(); probe.preload = requireData ? 'auto' : 'metadata';
         let done = false;
+        const abort = () => finish(null, new DOMException('已取消', 'AbortError'));
         const finish = (ok, error) => {
             if (done) return; done = true; clearTimeout(timer);
-            probe.onloadedmetadata = null; probe.onerror = null;
+            signal?.removeEventListener?.('abort', abort);
+            probe.onloadedmetadata = null; probe.onloadeddata = null; probe.oncanplay = null; probe.onerror = null;
             try { probe.removeAttribute?.('src'); probe.load?.(); } catch {}
             ok ? resolve(ok) : reject(error);
         };
         const timer = setTimeout(() => finish(null, core_text.safeUserError('音频读取超时，原有歌曲未替换。', 'RMT_MV_AUDIO_TIMEOUT')), 30000);
-        signal?.addEventListener?.('abort', () => finish(null, new DOMException('已取消', 'AbortError')), { once: true });
-        probe.onloadedmetadata = () => {
+        signal?.addEventListener?.('abort', abort, { once: true });
+        const ready = () => {
+            if (requireData && probe.readyState < 2) return;
             const duration = Number.isFinite(probe.duration) ? probe.duration : 0;
             duration > 0 ? finish({ duration }) : finish(null, core_text.safeUserError('这段音频无法取得完整时长，原有歌曲未替换。', 'RMT_MV_AUDIO'));
         };
+        probe.onloadedmetadata = ready;
+        if (requireData) { probe.onloadeddata = ready; probe.oncanplay = ready; }
         probe.onerror = () => finish(null, core_text.safeUserError('这个地址无法作为音频播放，原有歌曲未替换。', 'RMT_MV_AUDIO'));
         probe.src = url;
     });
 }
 
-async function commit(context, songId, media) {
-    const key = songAudioKey(context, songId);
-    const streaming = !media.blob;
-    // Online play may offer more than one address; keep the first that plays.
-    const candidates = streaming ? [media.url, ...(Array.isArray(media.alternates) ? media.alternates : [])].filter(Boolean) : [null];
-    let url, probed, failure;
-    for (const candidate of candidates) {
-        url = streaming ? music_link.musicUrl(candidate) : URL.createObjectURL(media.blob);
-        try { probed = await probeAudio(url); break; }
-        catch (error) {
-            if (!streaming) { try { URL.revokeObjectURL(url); } catch {} }
-            if (error?.name === 'AbortError') throw error;
-            failure = error;
-        }
-    }
-    if (!probed) {
-        if (media.failText) throw core_text.safeUserError(media.failText, 'RMT_MV_AUDIO');
-        throw failure;
-    }
-    try { mv.patchRecord(songId, { duration: probed.duration }, mv.captureMvTarget(context, songId)); } catch { /* No storyboard yet is fine. */ }
-    const name = core_text.normalizeText(media.name, 80) || '链接歌曲';
-    const artist = core_text.normalizeText(media.artist || '', 80), coverUrl = /^https:\/\//.test(media.coverUrl || '') ? media.coverUrl : '';
-    const saved = await mv_media.putMedia(key, streaming ? null : media.blob, name, { sourceUrl: media.sourceUrl || '', artist, coverUrl, ...(streaming ? { mediaUrl: url } : {}) });
-    // Not saved on this device: this entry is the only copy, so teardown must not release it.
-    remember(key, { url, name, streaming, sourceUrl: media.sourceUrl || '', artist, coverUrl, ...(saved ? {} : { unsaved: true }) });
-    announce(key);
-    return { saved, streaming, name };
+function startOperation(key, importing = true) {
+    const previous = operations.get(key);
+    const operation = { key, sequence: ++operationSequence, controller: new AbortController(), committed: false };
+    operations.set(key, operation);
+    revisions.set(key, (revisions.get(key) || 0) + 1);
+    previous?.controller.abort();
+    pending.delete(key);
+    if (importing) pending.set(key, operation.controller);
+    return operation;
+}
+function isLatest(operation) { return operations.get(operation.key) === operation; }
+function canContinue(operation) { return isLatest(operation) && !operation.controller.signal.aborted && (!operation.isCurrent || operation.isCurrent()); }
+function requireCurrent(operation) {
+    if (!canContinue(operation)) throw new DOMException('已取消', 'AbortError');
+}
+function acceptCommitted(operation) {
+    operation.committed = true;
+    if ((committedOperations.get(operation.key) || 0) >= operation.sequence) return false;
+    committedOperations.set(operation.key, operation.sequence);
+    return true;
 }
 
-async function importSongLink(context, songId, value) {
+async function storeForOperation(operation, action) {
+    const entries = unsettledStorage.get(operation.key) || new Set();
+    entries.add(operation); unsettledStorage.set(operation.key, entries);
+    try { return await action(); }
+    finally {
+        entries.delete(operation);
+        if (!entries.size) unsettledStorage.delete(operation.key);
+    }
+}
+function hasEarlierStorage(operation) {
+    return [...(unsettledStorage.get(operation.key) || [])].some(earlier => earlier.sequence < operation.sequence);
+}
+
+async function commit(context, songId, media, operation) {
+    const { key, controller } = operation, streaming = !media.blob;
+    const target = operation.target;
+    const candidates = streaming ? [media.url, ...(Array.isArray(media.alternates) ? media.alternates : [])].filter(Boolean) : [null];
+    let url, probed, failure, retained = false;
+    try {
+        const fromVideo = !streaming && audio_source.isVideoAudioSource(media.blob, media.name);
+        if (fromVideo) await audio_source.inspectVideoAudioSource(media.blob, { signal: controller.signal });
+        for (const candidate of candidates) {
+            requireCurrent(operation);
+            url = streaming ? music_link.musicUrl(candidate) : URL.createObjectURL(media.blob);
+            try { probed = await probeAudio(url, { signal: controller.signal, requireData: fromVideo }); break; }
+            catch (error) {
+                if (!streaming) { try { URL.revokeObjectURL(url); } catch {} url = ''; }
+                if (error?.name === 'AbortError') throw error;
+                failure = error;
+            }
+        }
+        requireCurrent(operation);
+        if (!probed) {
+            if (media.failText) throw core_text.safeUserError(media.failText, 'RMT_MV_AUDIO');
+            throw failure || core_text.safeUserError('没有可播放的音频，原有歌曲未替换。', 'RMT_MV_AUDIO');
+        }
+        const name = core_text.normalizeText(media.name, 80) || '链接歌曲';
+        const artist = core_text.normalizeText(media.artist || '', 80), coverUrl = /^https:\/\//.test(media.coverUrl || '') ? media.coverUrl : '';
+        const details = { sourceUrl: media.sourceUrl || '', artist, coverUrl, ...(streaming ? { mediaUrl: url } : {}) };
+        const publish = (unsaved = false) => {
+            retained = true;
+            remember(key, { url, blob: media.blob || null, duration: probed.duration, name, streaming, sourceUrl: details.sourceUrl, artist, coverUrl, ...(unsaved ? { unsaved: true } : {}) });
+            if (target) { try { mv.patchRecord(songId, { duration: probed.duration }, target); } catch { /* Audio is still available. */ } }
+            announce(key);
+        };
+        const saved = await storeForOperation(operation, () => mv_media.putMedia(key, streaming ? null : media.blob, name, details, {
+            signal: controller.signal, isCurrent: () => canContinue(operation),
+            onCommitted: () => {
+                // Starting a replacement cannot hide a write that already committed:
+                // the replacement may still fail. Only a newer confirmed write wins.
+                if (!acceptCommitted(operation)) return;
+                publish();
+            },
+        }));
+        if (!saved) {
+            requireCurrent(operation);
+            // A failed write must preserve durable audio. A previously unsaved
+            // track can still be replaced in memory; recheck storage so a prior
+            // committed write with a delayed receipt cannot become temporary. If its
+            // receipt is still pending and reads fail too, keep the old track;
+            // a manual retry can use the receipt once it arrives, without waiting.
+            const previous = loaded.get(key);
+            const stored = previous && !previous.unsaved ? previous : await mv_media.getMedia(key);
+            requireCurrent(operation);
+            const latest = loaded.get(key);
+            if (stored || (latest && !latest.unsaved) || hasEarlierStorage(operation)) throw core_text.safeUserError('音源未能保存，原有歌曲保留，请重试。', 'RMT_MV_AUDIO_SAVE');
+            operation.temporary = true;
+            publish(true);
+        }
+        return { saved, streaming, name };
+    } finally {
+        if (!streaming && url && !retained) { try { URL.revokeObjectURL(url); } catch {} }
+    }
+}
+
+async function importAudio(context, songId, source, isFile, options = {}) {
     const key = songAudioKey(context, songId);
-    let sourceUrl;
-    try { sourceUrl = music_link.musicUrl(value); }
-    catch (error) { status.set(key, error.message); repaint?.(); return false; }
-    pending.get(key)?.abort();
-    const controller = new AbortController();
-    pending.set(key, controller);
-    status.set(key, '正在读取音乐…'); repaint?.();
+    let value = source;
+    if (!isFile) {
+        try { value = music_link.musicUrl(source); }
+        catch (error) { status.set(key, error.message); repaint?.(); return false; }
+    } else if (!source) return false;
+    const operation = startOperation(key), { controller } = operation;
+    operation.isCurrent = options.isCurrent;
+    const cancel = () => controller.abort();
+    options.signal?.addEventListener?.('abort', cancel, { once: true });
+    if (options.signal?.aborted) cancel();
+    // Freeze the origin before link fetching, audio decoding or storage waits.
+    try { operation.target = mv.captureMvTarget(context, songId); } catch { /* A song may have no storyboard yet. */ }
+    status.set(key, isFile ? '正在检查音频…' : '正在读取音乐…'); repaint?.();
     const timer = setTimeout(() => controller.abort(), 60000);
     try {
-        const media = await music_link.readMusicLink(sourceUrl, { signal: controller.signal });
-        if (pending.get(key) !== controller) return false;
+        requireCurrent(operation);
+        const media = isFile ? { blob: value, name: value.name }
+            : await music_link.readMusicLink(value, { signal: controller.signal });
+        requireCurrent(operation);
         status.set(key, '正在检查音频…'); repaint?.();
-        const result = await commit(context, songId, media);
-        if (pending.get(key) !== controller) return false;
+        const result = await commit(context, songId, media, operation);
+        if (!isLatest(operation) || (!operation.committed && !operation.temporary)) return false;
         const done = result.streaming ? '已接入在线播放。导出手书视频时需要能下载这首歌，若导不出可改用「选择文件」。'
             : result.saved ? '已导入，这台设备会记住；制作手书时直接使用。' : '已导入，但这台设备没能记住，下次打开可能要重新导入。';
         if (media.resolvedFrom && media.sourceUrl) fill.set(key, media.sourceUrl);
         status.set(key, media.resolvedFrom ? `短链接已换成完整歌曲链接。${done}` : done);
         return true;
     } catch (error) {
-        if (pending.get(key) === controller) {
+        if (isLatest(operation) && pending.get(key) === controller) {
             status.set(key, controller.signal.aborted ? '音乐读取超时或已取消，原有歌曲未替换。'
                 : /^RMT_MV_/.test(error?.code || '') ? String(error.message) : (core_text.safeErrorSummary(error) || '读取没有完成，原有歌曲未替换。'));
         }
         return false;
     } finally {
         clearTimeout(timer);
+        options.signal?.removeEventListener?.('abort', cancel);
         if (pending.get(key) === controller) pending.delete(key);
         repaint?.();
     }
 }
 
-async function importSongFile(context, songId, file) {
-    const key = songAudioKey(context, songId);
-    if (!file) return false;
-    pending.get(key)?.abort();
-    status.set(key, '正在检查音频…'); repaint?.();
-    try {
-        const result = await commit(context, songId, { blob: file, name: file.name });
-        status.set(key, result.saved ? '已导入，这台设备会记住；制作手书时直接使用。' : '已导入，但这台设备没能记住，下次打开可能要重新导入。');
-        return true;
-    } catch (error) {
-        status.set(key, core_text.safeErrorSummary(error) || '音频未能导入，原有歌曲未替换。');
-        return false;
-    } finally { repaint?.(); }
-}
+function importSongLink(context, songId, value, options = {}) { return importAudio(context, songId, value, false, options); }
+function importSongFile(context, songId, file, options = {}) { return importAudio(context, songId, file, true, options); }
+function songAudioNote(context, songId) { return status.get(songAudioKey(context, songId)) || ''; }
 
 async function removeSongAudio(context, songId) {
-    const key = songAudioKey(context, songId);
-    pending.get(key)?.abort(); pending.delete(key);
-    const ok = await mv_media.deleteMedia(key);
-    if (ok) { remember(key, null); announce(key); status.set(key, '已移除这首歌的音源。'); }
-    else status.set(key, '音源未能移除，原有音源保留。');
+    const key = songAudioKey(context, songId), operation = startOperation(key, false);
+    const ok = await storeForOperation(operation, () => mv_media.deleteMedia(key, {
+        signal: operation.controller.signal, isCurrent: () => canContinue(operation),
+        onCommitted: () => {
+            if (!acceptCommitted(operation)) return;
+            remember(key, null); fill.delete(key); announce(key);
+            if (isLatest(operation)) status.set(key, '已移除这首歌的音源。');
+        },
+    }));
+    let removedTemporary = false;
+    if (!ok && canContinue(operation)) {
+        const previous = loaded.get(key);
+        // Only an explicitly unsaved in-memory entry may be removed without a
+        // storage receipt. Never report a durable deletion when it failed.
+        if (previous?.unsaved) {
+            const stored = await mv_media.getMedia(key);
+            if (!stored && canContinue(operation) && loaded.get(key) === previous && !hasEarlierStorage(operation)) {
+                remember(key, null); fill.delete(key); announce(key);
+                status.set(key, '已移除临时音源。');
+                removedTemporary = true;
+            }
+        }
+        if (!removedTemporary && canContinue(operation)) status.set(key, '音源未能移除，原有音源保留。');
+    }
     repaint?.();
-    return ok;
+    return ok || removedTemporary;
 }
 
 function cancelSongImport(context, songId) {
-    const key = songAudioKey(context, songId);
-    pending.get(key)?.abort(); pending.delete(key);
+    const key = songAudioKey(context, songId), controller = pending.get(key);
+    if (!controller) return;
+    controller.abort(); pending.delete(key);
+    revisions.set(key, (revisions.get(key) || 0) + 1);
     status.set(key, ''); repaint?.();
 }
 
@@ -10669,11 +10985,12 @@ function songPlayerHtml(context, songId, { readOnly = false, songTitle = '' } = 
 }
 
 __m_ui_songPlayer_js.loadSongAudio = loadSongAudio;
-__m_ui_songPlayer_js.importSongLink = importSongLink;
-__m_ui_songPlayer_js.importSongFile = importSongFile;
 __m_ui_songPlayer_js.removeSongAudio = removeSongAudio;
 __m_ui_songPlayer_js.songAudioKey = songAudioKey;
 __m_ui_songPlayer_js.currentSongAudio = currentSongAudio;
+__m_ui_songPlayer_js.importSongLink = importSongLink;
+__m_ui_songPlayer_js.importSongFile = importSongFile;
+__m_ui_songPlayer_js.songAudioNote = songAudioNote;
 __m_ui_songPlayer_js.cancelSongImport = cancelSongImport;
 __m_ui_songPlayer_js.setSongNote = setSongNote;
 __m_ui_songPlayer_js.setSongPlayerRepaint = setSongPlayerRepaint;
@@ -10817,6 +11134,7 @@ const esc = value => text.esc(value);
 const OWNER_TABS = ['char', 'user', 'pair', 'other'];
 const drafts = new Map(); // scope → unsaved drawing, kept while the page is closed
 const redrawing = new Set(); // saved sticker ids being redrawn one at a time
+const imageEdits = new Map(); // scope + sticker → latest explicit picture/caption operation
 let active = null, modal = null;
 
 function ensureStyles() {
@@ -10836,6 +11154,16 @@ function report(view, message) {
 }
 function failure(view, error) { report(view, text.safeErrorSummary(error) || '这次操作没有完成，请重试。'); }
 function data() { return store.readStickerData(hostContext()); }
+function imageEditKey(context, id) { return JSON.stringify([store.stickerScope(context), id]); }
+function beginImageEdit(context, id) {
+    const key = imageEditKey(context, id), scope = store.stickerScope(context), token = {};
+    imageEdits.set(key, token);
+    return {
+        isCurrent: () => imageEdits.get(key) === token && store.stickerScope(context) === scope && store.stickerScope(hostContext()) === scope,
+        finish: () => { if (imageEdits.get(key) === token) imageEdits.delete(key); },
+    };
+}
+function cancelImageEdit(context, id) { imageEdits.delete(imageEditKey(context, id)); }
 function label(owner) {
     const ctx = hostContext();
     return owner === 'user' ? '我' : store.ownerLabel(owner, ctx);
@@ -10900,6 +11228,7 @@ function askText(view, title, value, placeholder) {
 // ---------- 页面 ----------
 function loreSummary(current) {
     const state = stickers.loreState(current, hostContext());
+    if (state.unconfirmed) return state.removed ? '撤除已提交 · 待确认' : '已提交 · 保存未确认';
     if (state.written) return `已加入「${state.book}」`;
     return state.book ? `未加入 · 主世界书「${state.book}」` : '未加入';
 }
@@ -10986,12 +11315,13 @@ function cutHtml(view) {
 }
 function loreHtml(view) {
     const current = data(), ctx = hostContext(), state = stickers.loreState(current, ctx);
-    const where = state.written ? `已在主世界书「${state.book}」里写了一条「${store.LORE_COMMENT}」。撤掉这一条就完全恢复原样。`
+    const where = state.unconfirmed ? `已向「${state.book}」提交${state.removed ? '撤除' : '表情规则'}，酒馆未提供保存回执。请刷新酒馆后在世界书中核对；也可以手动重试。`
+        : state.written ? `已在主世界书「${state.book}」里写了一条「${store.LORE_COMMENT}」。撤掉时只移除本角色可确认归属的条目。`
         : state.book ? `${label('char')}已有主世界书「${state.book}」，会在里面追加一条「${store.LORE_COMMENT}」，不动其他条目。`
-            : `${label('char')}还没有主世界书，会新建「${label('char')}的表情包」并绑定为主世界书。`;
+            : `${label('char')}还没有主世界书，会新建一份带独立后缀的表情包世界书并绑定，不覆盖已有同名书。`;
     const char = esc(label('char'));
     return `<main class="rmt-stk">${head('世界书')}`
-        + `<section class="rmt-stk-card"><h3>加入世界书</h3><p class="rmt-stk-muted">${esc(where)}</p><p class="rmt-stk-muted">剧情里写到${char}用手机等通讯设备发消息时，${char}会在那些消息里挑合适的表情发；正文叙述里不发。</p><div class="rmt-stk-two"><button type="button" class="rmt-stk-primary" data-stk-action="lore-write"${state.empty ? ' disabled' : ''}>${state.written ? '更新世界书' : '加入世界书'}</button><button type="button" class="rmt-stk-danger" data-stk-action="lore-remove"${state.written ? '' : ' disabled'}>撤掉这一条</button></div></section>`
+        + `<section class="rmt-stk-card"><h3>加入世界书</h3><p class="rmt-stk-muted">${esc(where)}</p><p class="rmt-stk-muted">剧情里写到${char}用手机等通讯设备发消息时，${char}会在那些消息里挑合适的表情发；正文叙述里不发。</p><div class="rmt-stk-two"><button type="button" class="rmt-stk-primary" data-stk-action="lore-write"${state.empty ? ' disabled' : ''}>${state.written ? '更新世界书' : '加入世界书'}</button><button type="button" class="rmt-stk-danger" data-stk-action="lore-remove"${state.tracked ? '' : ' disabled'}>${state.removed ? '重试撤除' : '撤掉这一条'}</button></div></section>`
         + `<section class="rmt-stk-field">条目预览<pre class="rmt-stk-pre">${esc(state.content || '还没有表情。')}</pre><small>只写名字和一句意思，不放图片地址${state.content ? `，约 ${state.content.length} 字` : ''}；放在最新几条消息之前，不受世界书预算限制，只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情、或插件更新后打开聊天，都会自动更新已写入的条目。</small></section></main>`;
 }
 
@@ -11163,7 +11493,7 @@ async function chibiFilteredPeople(view, owner, people) {
             const filter = target.dataset.stkFilter === 'yes', remember = !!m.body.querySelector('[data-stk-filter-remember]')?.checked;
             const texts = result.rows.map((row, index) => m.body.querySelector(`[data-stk-filter-text="${index}"]`)?.value.trim() ?? row.text);
             finish(filter ? apply(texts) : people); closeStickerDialog();
-            if (remember) { const current = data(); void stickers.saveStickerData({ ...current, settings: { ...current.settings, chibiFilter: filter ? 'auto' : 'off' } }, hostContext()).catch(() => {}); }
+            if (remember) void stickers.saveStickerData(current => ({ ...current, settings: { ...current.settings, chibiFilter: filter ? 'auto' : 'off' } }), hostContext()).catch(() => {});
         });
     });
 }
@@ -11207,10 +11537,10 @@ async function saveDraft(view) {
         if (store.stickerScope(hostContext()) !== draft.scope) {
             return report(view, '保存途中换了角色，这组表情没有写进去。回到原来的角色再点保存，不会重复上传。');
         }
-        const current = store.readStickerData(ctx);
         const title = store.cleanLine(draft.idea, 10) || `${label(draft.owner)}的一组`;
         const pack = { id: store.newStickerId('pack'), owner: draft.owner, title, style: draft.styleId, idea: draft.idea, createdAt: Date.now(), cover: list[0].id, people: draft.people, stickers: list };
-        await stickers.saveStickerData({ ...current, packs: [...current.packs, pack] }, ctx);
+        await stickers.saveStickerData(current => ({ ...current, packs: [...current.packs, pack] }), ctx,
+            { isCurrent: () => drafts.get(view.scope) === draft && store.stickerScope(hostContext()) === draft.scope });
         discardDraft(view.scope);
         const saved = store.readStickerData(ctx).packs.find(row => row.id === pack.id);
         go(view, 'pack', { packId: pack.id, tab: draft.owner });
@@ -11221,17 +11551,19 @@ async function saveDraft(view) {
     }
 }
 
-function findSticker(id) {
-    const current = data();
+function findSticker(id, context = hostContext()) {
+    const current = store.readStickerData(context);
     for (const pack of current.packs) { const sticker = pack.stickers.find(row => row.id === id); if (sticker) return { current, pack, sticker }; }
     return null;
 }
-async function updateSticker(view, id, change) {
-    const found = findSticker(id); if (!found) return null;
-    const { current } = found;
-    const packs = current.packs.map(pack => ({ ...pack, stickers: pack.stickers.map(row => row.id === id ? { ...row, ...change } : row) }));
-    await stickers.saveStickerData({ ...current, packs }, hostContext());
-    return findSticker(id);
+async function updateSticker(view, id, change, { context = hostContext(), isCurrent = null } = {}) {
+    const scope = store.stickerScope(context);
+    if (view.scope && view.scope !== scope) return null;
+    const result = await stickers.saveStickerData(current => {
+        if (!current.packs.some(pack => pack.stickers.some(row => row.id === id))) return null;
+        return { ...current, packs: current.packs.map(pack => ({ ...pack, stickers: pack.stickers.map(row => row.id === id ? { ...row, ...change } : row) })) };
+    }, context, { isCurrent: () => store.stickerScope(hostContext()) === scope && (!isCurrent || isCurrent()) });
+    return result ? findSticker(id, context) : null;
 }
 function stickerDialog(view, id) {
     const found = findSticker(id); if (!found) return;
@@ -11248,66 +11580,70 @@ function stickerDialog(view, id) {
     if (!m) return;
     const status = value => { const node = m.body.querySelector('[data-stk-dialog-status]'); if (node) node.textContent = value || ''; };
     const setRedrawButton = busy => { const node = m.body.querySelector('[data-stk-do="redraw"]'); if (node) { node.disabled = busy; node.textContent = busy ? '正在重画…' : '单张重画'; } };
-    if (redrawing.has(id)) { setRedrawButton(true); status('这一张正在重画…'); }
+    const redrawKey = imageEditKey(hostContext(), id);
+    if (redrawing.has(redrawKey)) { setRedrawButton(true); status('这一张正在重画…'); }
     const reopen = () => { if (modal === m) { paint(view); stickerDialog(view, id); } };
     const run = work => Promise.resolve().then(work).catch(error => { if (modal === m) status(text.safeErrorSummary(error) || '这次没有完成，请重试。'); });
     m.body.addEventListener('change', event => {
         const field = event.target.dataset?.stkEdit; if (!field) return;
         void run(async () => {
-            const value = event.target.value;
+            const value = event.target.value, ctx = hostContext();
+            if (store.stickerScope(ctx) !== view.scope) return;
             if (field === 'name') {
                 const name = store.cleanStickerName(value, 8);
                 if (!name) { event.target.value = findSticker(id)?.sticker.name || ''; return status('名字不能为空。'); }
-                await updateSticker(view, id, { name });
+                await updateSticker(view, id, { name }, { context: ctx });
                 if (findSticker(id)?.sticker.name !== name) status('同组里已有这个名字，已自动加了数字。');
                 return reopen();
             }
-            if (field === 'meaning') { await updateSticker(view, id, { meaning: value }); return status('已保存。'); }
+            if (field === 'meaning') { await updateSticker(view, id, { meaning: value }, { context: ctx }); return status('已保存。'); }
             status('正在叠字…');
-            const now = findSticker(id)?.sticker; if (!now) return;
-            const saved = await stickers.saveStickerPicture({ base: now.base, caption: value }, hostContext());
-            await updateSticker(view, id, { caption: value, ...saved });
-            reopen();
+            const now = findSticker(id, ctx)?.sticker; if (!now) return;
+            const edit = beginImageEdit(ctx, id);
+            try {
+                const saved = await stickers.saveStickerPicture({ base: now.base, caption: value }, ctx);
+                await updateSticker(view, id, { caption: value, ...saved }, { context: ctx, isCurrent: edit.isCurrent });
+                reopen();
+            } finally { edit.finish(); }
         });
     });
     m.body.addEventListener('click', event => {
         const action = event.target.closest('[data-stk-do]')?.dataset.stkDo; if (!action) return;
         void run(async () => {
-            const now = findSticker(id); if (!now) return closeStickerDialog();
+            const ctx = hostContext(); if (store.stickerScope(ctx) !== view.scope) return;
+            const now = findSticker(id, ctx); if (!now) return closeStickerDialog();
             if (action === 'copy') {
                 await navigator.clipboard?.writeText(store.stickerToken(now.pack.owner, now.sticker.name, hostContext()));
                 return status('暗号已复制，粘进输入框就能发。');
             }
             if (action === 'cover') {
-                const current = data();
-                await stickers.saveStickerData({ ...current, packs: current.packs.map(pack => pack.id === now.pack.id ? { ...pack, cover: id } : pack) }, hostContext());
+                await stickers.saveStickerData(current => ({ ...current, packs: current.packs.map(pack => pack.id === now.pack.id ? { ...pack, cover: id } : pack) }), ctx);
                 return reopen();
             }
             if (action === 'replace') return m.body.querySelector('[data-stk-replace-file]').click();
             if (action === 'delete') {
-                const current = data();
-                await stickers.saveStickerData({ ...current, packs: current.packs.map(pack => pack.id === now.pack.id ? { ...pack, stickers: pack.stickers.filter(row => row.id !== id) } : pack) }, hostContext());
+                cancelImageEdit(ctx, id);
+                await stickers.saveStickerData(current => ({ ...current, packs: current.packs.map(pack => pack.id === now.pack.id ? { ...pack, stickers: pack.stickers.filter(row => row.id !== id) } : pack) }), ctx);
                 closeStickerDialog(); paint(view); return report(view, `已删掉「${now.sticker.name}」。`);
             }
             if (action === 'redraw') {
-                if (redrawing.has(id)) return status('这一张正在重画，请等它画完。');
-                redrawing.add(id); setRedrawButton(true);
+                if (redrawing.has(redrawKey)) return status('这一张正在重画，请等它画完。');
+                redrawing.add(redrawKey); setRedrawButton(true);
+                const edit = beginImageEdit(ctx, id);
                 let piece = null;
                 try {
                     status('正在单张重画…');
-                    const ctx = core_context.currentCharacterGuard();
                     // Redraw with the appearance this set was drawn with, so it still matches.
                     const people = now.pack.people?.length === 2 ? now.pack.people : await stickers.stickerPeople(ctx);
                     piece = await stickers.drawSingleSticker({ owner: now.pack.owner, styleId: now.pack.style || 'chibi-dumpling',
                         item: { name: now.sticker.name, prompt: now.sticker.prompt || now.sticker.meaning || now.sticker.name }, people, context: ctx,
-                        targetKey: `single:${id}`, onProgress: update => { if (modal === m) status(progressText(update)); } });
+                        targetKey: `single:${redrawKey}`, onProgress: update => { if (modal === m) status(progressText(update)); } });
                     status('正在保存…');
                     const saved = await stickers.saveStickerPicture({ blob: piece.blob, caption: now.sticker.caption }, ctx);
-                    if (store.stickerScope(hostContext()) !== store.stickerScope(ctx)) throw text.safeUserError('重画途中换了角色，新图没有替换。', 'RMT_STICKER_SCOPE');
-                    await updateSticker(view, id, saved);
+                    await updateSticker(view, id, saved, { context: ctx, isCurrent: edit.isCurrent });
                 } finally {
                     if (piece) URL.revokeObjectURL(piece.preview);
-                    redrawing.delete(id); setRedrawButton(false);
+                    edit.finish(); redrawing.delete(redrawKey); setRedrawButton(false);
                 }
                 return reopen();
             }
@@ -11317,12 +11653,18 @@ function stickerDialog(view, id) {
         const file = event.target.files?.[0]; event.target.value = '';
         if (!file) return;
         void run(async () => {
+            const ctx = hostContext(); if (store.stickerScope(ctx) !== view.scope) return;
+            const now = findSticker(id, ctx)?.sticker; if (!now) return;
+            const edit = beginImageEdit(ctx, id);
             status('正在保存图片…');
-            const blob = await stickers.prepareImport(file), now = findSticker(id)?.sticker;
-            const saved = blob.type === 'image/gif' || blob.type === 'image/webp'
-                ? { base: await stickers.uploadStickerImage(blob, hostContext()) } : await stickers.saveStickerPicture({ blob, caption: now?.caption }, hostContext());
-            await updateSticker(view, id, { base: saved.base, url: saved.url || saved.base, ...(saved.url ? {} : { caption: '' }) });
-            reopen();
+            try {
+                const blob = await stickers.prepareImport(file);
+                if (!edit.isCurrent()) return;
+                const saved = blob.type === 'image/gif' || blob.type === 'image/webp'
+                    ? { base: await stickers.uploadStickerImage(blob, ctx) } : await stickers.saveStickerPicture({ blob, caption: now.caption }, ctx);
+                await updateSticker(view, id, { base: saved.base, url: saved.url || saved.base, ...(saved.url ? {} : { caption: '' }) }, { context: ctx, isCurrent: edit.isCurrent });
+                reopen();
+            } finally { edit.finish(); }
         });
     });
 }
@@ -11378,11 +11720,14 @@ async function importFiles(view, files, packId = '') {
     if (store.stickerScope(hostContext()) !== store.stickerScope(ctx)) {
         return report(view, `导入途中换了角色，${added.length} 张图片已存进酒馆图片文件夹，但没有加进表情包。回到原来的角色再导入。`);
     }
-    const current = store.readStickerData(ctx);
-    let packs = current.packs, target = packId;
-    if (packId && packs.some(pack => pack.id === packId)) packs = packs.map(pack => pack.id === packId ? { ...pack, stickers: [...pack.stickers, ...added] } : pack);
-    else { target = store.newStickerId('pack'); packs = [...packs, { id: target, owner: 'other', title: '导入的表情', createdAt: Date.now(), cover: added[0].id, stickers: added }]; }
-    await stickers.saveStickerData({ ...current, packs }, ctx);
+    const target = packId || store.newStickerId('pack');
+    const saved = await stickers.saveStickerData(current => {
+        if (packId && !current.packs.some(pack => pack.id === packId)) return null;
+        const packs = packId ? current.packs.map(pack => pack.id === packId ? { ...pack, stickers: [...pack.stickers, ...added] } : pack)
+            : [...current.packs, { id: target, owner: 'other', title: '导入的表情', createdAt: Date.now(), cover: added[0].id, stickers: added }];
+        return { ...current, packs };
+    }, ctx, { isCurrent: () => store.stickerScope(hostContext()) === view.scope });
+    if (!saved) return report(view, '原来那组已经删除，图片文件已保留，但没有重新创建这一组。');
     go(view, 'pack', { packId: target, tab: 'other' });
     report(view, `已导入 ${added.length} 张。点开每张可以改名字和意思，名字就是暗号里的表情名。`);
 }
@@ -11397,18 +11742,18 @@ async function handleAction(view, action, target) {
         return view.fileInput.click();
     }
     if (action === 'rename-pack') {
-        const pack = data().packs.find(row => row.id === view.packId); if (!pack) return;
+        const ctx = hostContext(), pack = store.readStickerData(ctx).packs.find(row => row.id === view.packId); if (!pack) return;
         const value = await askText(view, '改组名', pack.title, '比如：外星人日常');
-        if (value === null) return;
-        const current = data();
-        await stickers.saveStickerData({ ...current, packs: current.packs.map(row => row.id === pack.id ? { ...row, title: store.cleanLine(value, 20) } : row) }, hostContext());
+        if (value === null || !current(view)) return;
+        await stickers.saveStickerData(latest => ({ ...latest, packs: latest.packs.map(row => row.id === pack.id ? { ...row, title: store.cleanLine(value, 20) } : row) }), ctx);
         return paint(view);
     }
     if (action === 'delete-pack') {
-        const pack = data().packs.find(row => row.id === view.packId); if (!pack) return;
+        const ctx = hostContext(), pack = store.readStickerData(ctx).packs.find(row => row.id === view.packId); if (!pack) return;
         if (!await confirmDialog(view, '删除这一组', `「${packTitle(pack)}」里的 ${pack.stickers.length} 个表情会从表情面板和世界书里去掉。图片文件仍留在酒馆图片文件夹。`, '删除')) return;
-        const current = data();
-        await stickers.saveStickerData({ ...current, packs: current.packs.filter(row => row.id !== pack.id) }, hostContext());
+        if (!current(view)) return;
+        for (const sticker of pack.stickers) cancelImageEdit(ctx, sticker.id);
+        await stickers.saveStickerData(latest => ({ ...latest, packs: latest.packs.filter(row => row.id !== pack.id) }), ctx);
         go(view, 'home'); return report(view, '已删除这一组。');
     }
     if (action === 'list') return makeList(view);
@@ -11429,16 +11774,20 @@ async function handleAction(view, action, target) {
     if (action === 'save-draft') return saveDraft(view);
     if (action === 'lore-write') {
         const result = await stickers.writeStickerLore(hostContext());
-        paint(view); return report(view, result.created ? `已新建「${result.book}」并绑定为${label('char')}的主世界书。` : `已写进「${result.book}」。`);
+        paint(view); return report(view, `已向「${result.book}」提交表情规则，保存尚未确认。请刷新酒馆后核对。`
+            + (result.legacyPreserved ? '归属不明的旧表情包条目已保留，请在世界书中确认。' : ''));
     }
     if (action === 'float') {
         const on = store.setStickerFloat(!store.stickerFloatEnabled(hostContext()), hostContext());
         paint(view); return report(view, on ? '聊天页会显示悬浮小兔子。' : '悬浮小兔子已关，可以从魔法棒菜单里的「表情包」打开。');
     }
     if (action === 'lore-remove') {
+        const ctx = hostContext();
         if (!await confirmDialog(view, '撤掉这一条', `会从世界书里删掉「${store.LORE_COMMENT}」这一条，其他条目不动。`, '撤掉')) return;
-        const book = await stickers.removeStickerLore(hostContext());
-        paint(view); return report(view, book ? `已从「${book}」撤掉。` : '已撤掉。');
+        if (!current(view)) return;
+        const book = await stickers.removeStickerLore(ctx);
+        paint(view); return report(view, (book ? `已向「${book}」提交撤除请求，尚未确认保存。请刷新酒馆后核对。` : '没有已关联的表情规则。')
+            + (store.readStickerData(hostContext()).lore.legacyPreserved ? '归属不明的旧表情包条目已保留，请在世界书中确认。' : ''));
     }
 }
 
@@ -11459,9 +11808,11 @@ function bindView(view) {
     view.root.addEventListener('change', event => {
         if (event.target.matches('[data-stk-chibi]')) {
             readIdeaForm(view);
-            const current = data(), value = event.target.value;
-            const settings = { ...current.settings }; if (value) settings.chibiFilter = value; else delete settings.chibiFilter;
-            void stickers.saveStickerData({ ...current, settings }, hostContext()).catch(error => failure(view, error));
+            const value = event.target.value;
+            void stickers.saveStickerData(latest => {
+                const settings = { ...latest.settings }; if (value) settings.chibiFilter = value; else delete settings.chibiFilter;
+                return { ...latest, settings };
+            }, hostContext()).catch(error => failure(view, error));
         }
     });
 }
@@ -16179,7 +16530,7 @@ async function runAutoMemoryRound(input, io) {
     const after = await io.readMemoryIds();
     const fresh = auto_memory_draw.newMemoryIds(input.memoryIds, after);
     if (!fresh.length) return persistNoop(snapshot, input.floor, io, input.now, 'no-new-memory', floorWindow);
-    return drawFresh(snapshot, fresh, input, io);
+    return drawFresh(snapshot, fresh, { ...input, archiveRevision: imported?.archiveRevision || input.archiveRevision }, io);
 }
 
 async function drawKnownMemories(input, io) {
@@ -16991,6 +17342,122 @@ function migrateLegacyAutoPreferences(existingPlanRaw, legacyAutoUpdates, now = 
 __m_autoMemory_migrateLegacy_js.migrateLegacyAutoPreferences = migrateLegacyAutoPreferences;
 }
 
+function __init_autoMemory_roundContext_js() {
+// MODULE: autoMemory/roundContext.js
+const archive_repository = __m_archive_repository_js;
+const core_context = __m_core_context_js;
+const core_tasks = __m_core_requestCoordinator_js;
+const auto_memory_plan = __m_autoMemory_planStore_js;
+// 一整轮共用同一个来源和取消句柄；步骤之间没有 provider 请求时也不能重绑到另一段聊天。
+
+
+
+
+const rounds = new Set();
+
+function revision(context) {
+    return archive_repository.getImportedMemory(context)?.archiveRevision || '';
+}
+
+function abort(round) {
+    const error = core_tasks.createGenerationAbortError('自动留忆的聊天、档案或计划已改变，这一轮已停止。');
+    round.task.controller.abort(error);
+    throw error;
+}
+
+function autoMemoryOriginCurrent(context, origin) {
+    try {
+        const live = core_context.currentCharacterGuard();
+        return !!context && core_context.isCurrentTaskRunOrigin(origin, live)
+            && live.chatMetadata === context.chatMetadata
+            && !core_tasks.chatScopeCancellationBlocksOrigin(origin);
+    } catch { return false; }
+}
+
+function assertAutoMemoryRound(round, { allowArchiveChange = false } = {}) {
+    if (!round) throw core_tasks.createGenerationAbortError();
+    core_tasks.assertLogicalGenerationTaskCurrent(round.task);
+    let live;
+    try { live = core_context.currentCharacterGuard(); }
+    catch { abort(round); }
+    const plan = round.context.chatMetadata?.[auto_memory_plan.AUTO_MEMORY_PLAN_KEY];
+    if (!core_context.isCurrentTaskRunOrigin(round.origin, live)
+        || live.chatMetadata !== round.context.chatMetadata
+        || !plan?.enabled || plan.revision !== round.planRevision
+        || core_tasks.chatScopeCancellationBlocksOrigin(round.origin)
+        || (!allowArchiveChange && revision(live) !== round.archiveRevision)) abort(round);
+    return round.context;
+}
+
+function notePlanCommit(round, next) {
+    round.planRevision = next.plan.revision;
+    assertAutoMemoryRound(round);
+}
+
+function generationOptions(round) {
+    return { context: assertAutoMemoryRound(round), origin: round.origin,
+        signal: round.task.signal, logicalParentTaskId: round.task.id };
+}
+
+// 只有本轮导入明确提交的版本能推进栅栏；被取消、延迟或并发覆盖的导入都不能续写。
+function acceptArchiveCommit(round, result) {
+    assertAutoMemoryRound(round, { allowArchiveChange: true });
+    if (result?.status === 'noop') return assertAutoMemoryRound(round);
+    if (result?.status !== 'committed' || !result.archiveRevision
+        || revision(round.context) !== result.archiveRevision) abort(round);
+    round.archiveRevision = result.archiveRevision;
+    round.origin = { ...round.origin, archiveRevision: round.archiveRevision, archivePresent: true };
+    core_tasks.bindLogicalGenerationTask(round.task, round.origin);
+    return assertAutoMemoryRound(round);
+}
+
+async function withAutoMemoryRound(context, run, existing = null) {
+    if (existing) {
+        assertAutoMemoryRound(existing);
+        const result = await run(existing);
+        assertAutoMemoryRound(existing);
+        return result;
+    }
+    const archiveRevision = revision(context);
+    const origin = core_context.captureTaskOrigin(context, archiveRevision);
+    const planRevision = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata)?.plan?.revision;
+    const task = core_tasks.beginLogicalGenerationTask({ kind: 'auto-memory', mode: 'auto-memory',
+        label: '自动留忆', taskKey: `auto-memory-round:${core_context.chatScopeKey(context)}`, context, origin });
+    const round = { context, origin, task, archiveRevision, planRevision };
+    rounds.add(round);
+    const unsubscribe = auto_memory_plan.onAutoMemoryDisabled(metadata => {
+        if (metadata === context.chatMetadata) task.controller.abort(core_tasks.createGenerationAbortError());
+    });
+    let outcome;
+    try {
+        assertAutoMemoryRound(round);
+        const result = await run(round);
+        assertAutoMemoryRound(round);
+        outcome = { status: result?.action === 'failed' ? 'failed' : 'done' };
+        return result;
+    } catch (error) {
+        outcome = { status: error?.name === 'AbortError' ? 'cancelled' : 'failed', error };
+        throw error;
+    } finally {
+        unsubscribe();
+        rounds.delete(round);
+        core_tasks.finishLogicalGenerationTask(task, outcome);
+    }
+}
+
+function cancelAutoMemoryRounds() {
+    for (const round of rounds) round.task.controller.abort(core_tasks.createGenerationAbortError());
+}
+
+__m_autoMemory_roundContext_js.withAutoMemoryRound = withAutoMemoryRound;
+__m_autoMemory_roundContext_js.autoMemoryOriginCurrent = autoMemoryOriginCurrent;
+__m_autoMemory_roundContext_js.assertAutoMemoryRound = assertAutoMemoryRound;
+__m_autoMemory_roundContext_js.notePlanCommit = notePlanCommit;
+__m_autoMemory_roundContext_js.generationOptions = generationOptions;
+__m_autoMemory_roundContext_js.acceptArchiveCommit = acceptArchiveCommit;
+__m_autoMemory_roundContext_js.cancelAutoMemoryRounds = cancelAutoMemoryRounds;
+}
+
 function __init_autoMemory_moduleHost_js() {
 // MODULE: autoMemory/moduleHost.js
 const archive_repository = __m_archive_repository_js;
@@ -17003,7 +17470,9 @@ const auto_memory_gap = __m_autoMemory_gapFill_js;
 const auto_memory_plans = __m_autoMemory_modulePlans_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const auto_memory_runner = __m_autoMemory_moduleRunner_js;
+const auto_memory_round = __m_autoMemory_roundContext_js;
 // 把冻结好的步骤交给现有生成入口。一次唤醒只推进当前这一批，不重做已经记下的步骤。
+
 
 
 
@@ -17085,16 +17554,23 @@ function stepOptions(step, plan) {
     return options;
 }
 
-async function executeModuleStep({ step, plan, carryAchievement }, context) {
-    // r84.175：最后一步顺便给「等批注」的手帐页写一句（读不到手帐就当没有，不影响本轮）。
+async function executeModuleStep({ step, plan, carryAchievement }, context, round) {
+    auto_memory_round.assertAutoMemoryRound(round);
+    // r84.175：携带成就的步骤顺便给「等批注」的手帐页写一句（读不到手帐就当没有，不影响本轮）。
     const wanted = carryAchievement ? await journal_piggyback.wantedJournalPages() : { scope: '', pages: [] };
-    if (carryAchievement) generation_achievement.armAchievementCapture({ journalPages: wanted.pages, charName: context?.name2, userName: context?.name1 });
+    auto_memory_round.assertAutoMemoryRound(round);
+    const capture = carryAchievement ? generation_achievement.armAchievementCapture({ journalPages: wanted.pages,
+        charName: context?.name2, userName: context?.name1, signal: round.task.signal }) : null;
     try {
-        const result = await generation_client.generateMode(plan.moduleId, stepOptions(step, plan));
-        const journalNotes = generation_achievement.takeJournalNotes();
-        const achievement = generation_achievement.finishAchievementCapture();
-        if (Object.keys(journalNotes).length) void journal_piggyback.saveJournalNotes(wanted.scope, journalNotes, context?.name2 || '');
-        if (!result || result.status === 'failed' || result.status === 'cancelled' || result.status === 'blocked') return { saved: false };
+        const result = await generation_client.generateMode(plan.moduleId, { ...stepOptions(step, plan), ...auto_memory_round.generationOptions(round), autoMemoryCapture: capture });
+        auto_memory_round.assertAutoMemoryRound(round);
+        const journalNotes = generation_achievement.takeJournalNotes(capture);
+        const achievement = generation_achievement.finishAchievementCapture(capture);
+        if (Object.keys(journalNotes).length) {
+            await journal_piggyback.saveJournalNotes(wanted.scope, journalNotes, context?.name2 || '');
+            auto_memory_round.assertAutoMemoryRound(round);
+        }
+        if (!result || result.status === 'failed' || result.status === 'cancelled' || result.status === 'blocked' || result.status === 'deferred') return { saved: false };
         if (result?.status === 'noop') return { noop: true };
         if (step.kind === 'catalog') {
             const facts = collectModuleFacts(plan.moduleId, context, plan);
@@ -17103,23 +17579,26 @@ async function executeModuleStep({ step, plan, carryAchievement }, context) {
         }
         return { saved: true, recoverySlot: `${plan.moduleId}:${step.id}`, achievement };
     } catch (error) {
-        generation_achievement.finishAchievementCapture();
+        generation_achievement.finishAchievementCapture(capture);
         throw error;
     }
 }
 
-async function runModulePlan(snapshot, persist, context, now = Date.now()) {
+async function runModulePlan(snapshot, persist, context, now = Date.now(), round) {
+    auto_memory_round.assertAutoMemoryRound(round);
     const item = auto_memory_registry.autoMemoryModuleById(snapshot?.modulePlan?.moduleId);
     const plan = snapshot?.modulePlan;
     return auto_memory_runner.runPending(snapshot, {
         now,
         module: item,
         persist,
-        execute: request => executeModuleStep(request, context),
+        execute: request => executeModuleStep(request, context, round),
         heldAchievement: () => auto_memory_gap.readPendingAchievement(context?.chatMetadata, plan?.drawId),
-        holdAchievement: packet => {
+        holdAchievement: async packet => {
+            auto_memory_round.assertAutoMemoryRound(round);
             if (!auto_memory_gap.holdPendingAchievement(context?.chatMetadata, { drawId: plan?.drawId, moduleId: plan?.moduleId, achievement: packet })) return;
-            context?.saveMetadataDebounced?.();
+            await context?.saveMetadataDebounced?.();
+            auto_memory_round.assertAutoMemoryRound(round);
         },
     });
 }
@@ -17929,8 +18408,12 @@ function parseRevealRecord(value) {
     };
 }
 
-function parseList(value, parseItem, max) {
-    if (!Array.isArray(value) || value.length > max) throw corrupt();
+function parseList(value, parseItem) {
+    // Tickets and reveals are persistent history, not one response batch. Their
+    // references must survive long chats; a count cap or truncation here would
+    // either stop the next draw or detach existing letters and achievements.
+    // Keep every record's schema and unique identity checks below.
+    if (!Array.isArray(value)) throw corrupt();
     const rows = value.map(parseItem);
     const ids = new Set(rows.map(item => item.id));
     if (ids.size !== rows.length) throw corrupt();
@@ -17940,13 +18423,13 @@ function parseList(value, parseItem, max) {
 function parseAutoMemorySnapshot(value) {
     exactKeys(value, SNAPSHOT_KEYS);
     const plan = parseAutoMemoryPlan(value.plan);
-    const drawTickets = parseList(value.drawTickets, parseDrawTicket, 40);
+    const drawTickets = parseList(value.drawTickets, parseDrawTicket);
     if (plan.activeDrawTicketId && !drawTickets.some(item => item.id === plan.activeDrawTicketId)) throw corrupt();
     const modulePlan = value.modulePlan === null ? null : parseModulePlan(value.modulePlan);
     if (modulePlan && plan.activeDrawTicketId && modulePlan.drawId !== plan.activeDrawTicketId) throw corrupt();
     return {
         plan,
-        revealRecords: parseList(value.revealRecords, parseRevealRecord, 200),
+        revealRecords: parseList(value.revealRecords, parseRevealRecord),
         drawTickets,
         modulePlan,
     };
@@ -18053,7 +18536,17 @@ function assignAutoMemoryMetadata(chatMetadata, snapshot) {
     chatMetadata[AUTO_MEMORY_REVEAL_KEY] = parsed.revealRecords;
     chatMetadata[AUTO_MEMORY_DRAW_TICKETS_KEY] = parsed.drawTickets;
     chatMetadata[AUTO_MEMORY_MODULE_PLAN_KEY] = parsed.modulePlan;
+    if (!parsed.plan.enabled) {
+        for (const listener of disabledListeners) listener(chatMetadata);
+    }
     return parsed;
+}
+
+const disabledListeners = new Set();
+
+function onAutoMemoryDisabled(listener) {
+    disabledListeners.add(listener);
+    return () => disabledListeners.delete(listener);
 }
 
 function commitAutoMemoryMetadata(chatMetadata, snapshot, expectedRevision) {
@@ -18107,15 +18600,16 @@ async function readAutoMemoryRecovery(chatId) {
     return parseAutoMemoryRecoveryRecord(stored);
 }
 
-async function writeAutoMemoryRecovery(chatId, snapshot, expectedRevision) {
+async function writeAutoMemoryRecovery(chatId, snapshot, expectedRevision, options = {}) {
+    options.assertCurrent?.();
     if (!autoMemoryRecoveryAvailable()) throw recoveryUnavailable();
     const parsed = parseAutoMemorySnapshot(snapshot);
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || parsed.plan.revision !== expectedRevision + 1) throw stale();
     const record = parseAutoMemoryRecoveryRecord({
         key: recoveryKey(chatId), schemaVersion: 1, chatId, revision: parsed.plan.revision, payload: parsed,
     });
-    if (testBackend) return parseAutoMemoryRecoveryRecord(await testBackend.write(record.key, expectedRevision, record));
-    return parseAutoMemoryRecoveryRecord(await idbWrite(record.key, expectedRevision, record));
+    if (testBackend) return parseAutoMemoryRecoveryRecord(await testBackend.write(record.key, expectedRevision, record, options));
+    return parseAutoMemoryRecoveryRecord(await idbWrite(record.key, expectedRevision, record, options));
 }
 
 async function idbRead(key) {
@@ -18160,24 +18654,38 @@ async function compareAutoMemoryRecord(key, decide) {
     } finally { db.close(); }
 }
 
-async function idbWrite(key, expectedRevision, record) {
+async function idbWrite(key, expectedRevision, record, options = {}) {
     const db = await database();
     try {
+        options.assertCurrent?.();
         return await new Promise((resolve, reject) => {
             const tx = db.transaction(STORE, 'readwrite');
-            let mismatch = false;
-            const timer = setTimeout(() => { try { tx.abort(); } catch { /* already closed */ } reject(recoveryUnavailable()); }, 5000);
+            let failure = null;
+            const cancel = () => {
+                failure = options.signal?.reason || recoveryUnavailable();
+                try { tx.abort(); } catch { /* already closed */ }
+            };
+            const timer = setTimeout(() => { failure = recoveryUnavailable(); cancel(); }, 5000);
+            const cleanup = () => {
+                clearTimeout(timer);
+                options.signal?.removeEventListener?.('abort', cancel);
+            };
+            options.signal?.addEventListener?.('abort', cancel, { once: true });
             const store = tx.objectStore(STORE);
             const request = store.get(key);
             request.onsuccess = () => {
-                if ((request.result?.revision || 0) !== expectedRevision) { mismatch = true; tx.abort(); return; }
-                store.put(record);
+                try {
+                    options.assertCurrent?.();
+                    if ((request.result?.revision || 0) !== expectedRevision) throw stale('自动留忆备份版本已变化，没有覆盖较新的记录。');
+                    store.put(record);
+                } catch (error) {
+                    failure = error;
+                    tx.abort();
+                }
             };
-            tx.oncomplete = () => { clearTimeout(timer); resolve(record); };
-            tx.onabort = tx.onerror = () => {
-                clearTimeout(timer);
-                reject(mismatch ? stale('自动留忆备份版本已变化，没有覆盖较新的记录。') : recoveryUnavailable());
-            };
+            tx.oncomplete = () => { cleanup(); resolve(record); };
+            tx.onabort = tx.onerror = () => { cleanup(); reject(failure || recoveryUnavailable()); };
+            if (options.signal?.aborted) cancel();
         });
     } finally { db.close(); }
 }
@@ -18199,6 +18707,7 @@ __m_autoMemory_planStore_js.selectAutoMemoryCanonical = selectAutoMemoryCanonica
 __m_autoMemory_planStore_js.assertMayRestoreFromRecovery = assertMayRestoreFromRecovery;
 __m_autoMemory_planStore_js.prepareAutoMemoryWrite = prepareAutoMemoryWrite;
 __m_autoMemory_planStore_js.assignAutoMemoryMetadata = assignAutoMemoryMetadata;
+__m_autoMemory_planStore_js.onAutoMemoryDisabled = onAutoMemoryDisabled;
 __m_autoMemory_planStore_js.commitAutoMemoryMetadata = commitAutoMemoryMetadata;
 __m_autoMemory_planStore_js.autoMemoryRecoveryAvailable = autoMemoryRecoveryAvailable;
 __m_autoMemory_planStore_js.AUTO_MEMORY_PLAN_KEY = AUTO_MEMORY_PLAN_KEY;
@@ -18516,6 +19025,7 @@ const auto_memory_floor = __m_autoMemory_floorPace_js;
 const auto_memory_gap = __m_autoMemory_gapFill_js;
 const auto_memory_gate = __m_autoMemory_incrementalGate_js;
 const auto_memory_host = __m_autoMemory_moduleHost_js;
+const auto_memory_round = __m_autoMemory_roundContext_js;
 const auto_memory_lease = __m_autoMemory_instanceLease_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_combined = __m_autoMemory_combinedResult_js;
@@ -18534,6 +19044,7 @@ const auto_memory_stream = __m_autoMemory_streamGate_js;
 const ui_countdown = __m_ui_autoMemoryCountdown_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 // 启用新计划后，楼层到点就读最近这一窗正文，做成增量回忆再抽签。没有新记忆或没有可抽模块时不发模块请求。
+
 
 
 
@@ -18616,21 +19127,28 @@ function generationStillOpen(context) {
     return auto_memory_stream.generationOpen(context);
 }
 
-async function rememberTitle(context, result) {
+async function rememberTitle(context, result, round) {
+    auto_memory_round.assertAutoMemoryRound(round);
     const wroteTitle = auto_memory_gap.rememberAchievementTitle(context?.chatMetadata, result?.achievement);
     let wroteLibrary = false;
     if (result?.action === 'reveal') {
         try {
             await core_cache.ensureCacheHydrated(context);
+            auto_memory_round.assertAutoMemoryRound(round);
             wroteLibrary = auto_memory_library.saveAutoAchievement(context, result);
         } catch (error) {
+            if (error?.name === 'AbortError') throw error;
             console.warn('[HeartbeatMemories] achievement library skipped', core_text.safeErrorDiagnostic(error));
         }
     }
+    auto_memory_round.assertAutoMemoryRound(round);
     if (wroteLibrary || result?.action === 'achievement-pending') {
         auto_memory_gap.clearPendingAchievement(context?.chatMetadata, result?.snapshot?.modulePlan?.drawId);
     }
-    if (wroteTitle || wroteLibrary) context.saveMetadataDebounced?.();
+    if (wroteTitle || wroteLibrary) {
+        await context.saveMetadataDebounced?.();
+        auto_memory_round.assertAutoMemoryRound(round);
+    }
 }
 
 function moduleLabel(moduleId) {
@@ -18656,12 +19174,13 @@ function finishHostJob(job, result) {
     ui_taskCenter.settleAutoMemoryJob(job.id, action === 'failed' ? 'failed' : 'done', detail);
 }
 
-async function withAutoMemoryJob(moduleId, detail, run) {
+async function withAutoMemoryJob(moduleId, detail, run, context, round = null) {
+    const execute = () => auto_memory_round.withAutoMemoryRound(context, run, round);
     const label = moduleLabel(moduleId);
     const job = ui_taskCenter.openAutoMemoryJob({ label, detail });
-    if (!job.owned) return run();
+    if (!job.owned) return execute();
     try {
-        const result = await run();
+        const result = await execute();
         if (result?.action === 'idle') {
             ui_taskCenter.settleAutoMemoryJob(job.id, 'cancelled', '这一轮没有要补的内容。');
             return result;
@@ -18671,6 +19190,10 @@ async function withAutoMemoryJob(moduleId, detail, run) {
         ui_taskCenter.settleAutoMemoryJob(job.id, failed ? 'failed' : 'done', failed ? '这一次没写完。可以再点补全。' : detail);
         return result;
     } catch (error) {
+        if (error?.name === 'AbortError') {
+            ui_taskCenter.settleAutoMemoryJob(job.id, 'cancelled', '这一轮已停止，可以回到原聊天后补全。');
+            throw error;
+        }
         ui_taskCenter.settleAutoMemoryJob(job.id, 'failed', '这一次没写完。可以再点补全。');
         console.warn('[HeartbeatMemories] auto memory job skipped', core_text.safeErrorDiagnostic(error));
         return { action: 'failed', error };
@@ -18680,12 +19203,16 @@ async function withAutoMemoryJob(moduleId, detail, run) {
 // 计划最多 200 步。一次唤醒就把能写的都写完，不留到下一楼；失败或没有进展时停下，交给重试。
 const PLAN_PASS_LIMIT = 200;
 
-async function runPlanToEnd(snapshot, persist, context) {
+async function runPlanToEnd(snapshot, persist, context, round) {
+    auto_memory_round.assertAutoMemoryRound(round);
     let current = snapshot;
     let result = null;
     for (let pass = 0; pass < PLAN_PASS_LIMIT; pass += 1) {
-        result = await auto_memory_host.runModulePlan(current, persist, context, Date.now());
-        await rememberTitle(context, result);
+        auto_memory_round.assertAutoMemoryRound(round);
+        result = await auto_memory_host.runModulePlan(current, persist, context, Date.now(), round);
+        auto_memory_round.assertAutoMemoryRound(round);
+        await rememberTitle(context, result, round);
+        auto_memory_round.assertAutoMemoryRound(round);
         current = result?.snapshot || current;
         if (result?.action !== 'saved' && result?.action !== 'expanded') break;
         const steps = current?.modulePlan?.steps || [];
@@ -18695,11 +19222,11 @@ async function runPlanToEnd(snapshot, persist, context) {
     return result;
 }
 
-async function runModule(snapshot, persist, context) {
-    return withAutoMemoryJob(snapshot?.modulePlan?.moduleId, '抽中了这一轮，正在写。', async () => {
-        const result = await runPlanToEnd(snapshot, persist, context);
-        return followIfEnabled(context, result);
-    });
+async function runModule(snapshot, persist, context, round) {
+    return withAutoMemoryJob(snapshot?.modulePlan?.moduleId, '抽中了这一轮，正在写。', async round => {
+        const result = await runPlanToEnd(snapshot, persist, context, round);
+        return followIfEnabled(context, result, round);
+    }, context, round);
 }
 
 function moduleStillOpen(result) {
@@ -18707,7 +19234,8 @@ function moduleStillOpen(result) {
     return steps.some(step => step.status !== 'completed');
 }
 
-async function followIfEnabled(context, result) {
+async function followIfEnabled(context, result, round) {
+    auto_memory_round.assertAutoMemoryRound(round);
     const settings = core_settings.getPluginSettings();
     if (settings.autoRetryEnabled !== true || autoRepairInflight) return result;
     const limit = Math.max(1, Math.min(5, Math.floor(Number(settings.autoRetryCount)) || 1));
@@ -18715,6 +19243,7 @@ async function followIfEnabled(context, result) {
     let current = result;
     try {
         while (current?.action === 'achievement-pending' || moduleStillOpen(current)) {
+            auto_memory_round.assertAutoMemoryRound(round);
             const drawId = current.snapshot?.modulePlan?.drawId || current.reveal?.id || 'round';
             const kind = current.action === 'achievement-pending' ? 'achievement' : 'module';
             const key = `${drawId}|${kind}`;
@@ -18722,8 +19251,9 @@ async function followIfEnabled(context, result) {
             if (!auto_memory_redo.shouldAutoRepair({ enabled: true, used, limit })) break;
             autoUsed.set(key, used + 1);
             const next = kind === 'achievement'
-                ? await repairFloorAchievement(context)
-                : await resumeFloorPlan();
+                ? await repairFloorAchievement(context, round)
+                : await resumeFloorPlan(context, round);
+            auto_memory_round.assertAutoMemoryRound(round);
             if (!next || next.action === 'failed') {
                 if (!auto_memory_redo.retryableFailure(next?.error)) autoUsed.set(key, limit);
                 if (next?.action === 'failed') continue;
@@ -18737,20 +19267,33 @@ async function followIfEnabled(context, result) {
     return current;
 }
 
-async function persistSnapshot(context, next) {
+async function persistSnapshot(context, next, round) {
+    auto_memory_round.assertAutoMemoryRound(round);
     const metadata = context.chatMetadata;
     const current = auto_memory_plan.readAutoMemoryMetadata(metadata);
     auto_memory_plan.commitAutoMemoryMetadata(metadata, next, current ? current.plan.revision : 0);
+    auto_memory_round.notePlanCommit(round, next);
     await context.saveMetadataDebounced?.();
+    auto_memory_round.assertAutoMemoryRound(round);
     try {
-        const chatId = core_context.getChatId(context);
+        const chatId = round.origin.chatId;
         const recovery = await auto_memory_plan.readAutoMemoryRecovery(chatId);
+        auto_memory_round.assertAutoMemoryRound(round);
         const expected = recovery ? recovery.revision : 0;
-        if (next.plan.revision === expected + 1) await auto_memory_plan.writeAutoMemoryRecovery(chatId, next, expected);
-    } catch { /* 聊天记录已经写下。备份写失败时不改主档。 */ }
+        if (next.plan.revision === expected + 1) {
+            await auto_memory_plan.writeAutoMemoryRecovery(chatId, next, expected, {
+                assertCurrent: () => auto_memory_round.assertAutoMemoryRound(round), signal: round.task.signal,
+            });
+            auto_memory_round.assertAutoMemoryRound(round);
+        }
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        // 聊天记录已经写下。备份写失败时不改主档。
+    }
 }
 
-async function writeGap(context, note) {
+async function writeGap(context, note, round) {
+    auto_memory_round.assertAutoMemoryRound(round);
     const metadata = context.chatMetadata;
     if (!metadata) return;
     if (!note) delete metadata[auto_memory_gap.GAP_KEY];
@@ -18765,6 +19308,7 @@ async function writeGap(context, note) {
         metadata[auto_memory_gap.GAP_KEY] = stored;
     }
     await context.saveMetadataDebounced?.();
+    auto_memory_round.assertAutoMemoryRound(round);
 }
 
 function gapMessages(context, note) {
@@ -18804,12 +19348,14 @@ async function runHostRound() {
     const metadata = context.chatMetadata;
     if (!metadata || !Object.prototype.hasOwnProperty.call(metadata, auto_memory_plan.AUTO_MEMORY_PLAN_KEY)) return;
     const scope = core_context.chatScopeKey(context);
+    const queuedOrigin = core_context.captureTaskOrigin(context);
     const latestFloor = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
     const floor = latestFloor
         ? auto_memory_floor.assistantFloorCount(context.chat)
         : (Array.isArray(context.chat) ? context.chat.length : 0);
     if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
     const body = async claim => {
+        if (!auto_memory_round.autoMemoryOriginCurrent(context, queuedOrigin)) return;
         if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
         inflightScopes.add(scope);
         try {
@@ -18826,65 +19372,76 @@ async function runHostRound() {
             }
             const live = core_context.currentCharacterGuard();
             if (core_context.chatScopeKey(live) !== scope) return;
-            const persist = next => persistSnapshot(context, next);
-            const due = snapshot.plan.nextDueFloor == null ? false : floor >= snapshot.plan.nextDueFloor;
-            const continuing = auto_memory_gate.modulePlanOpen(snapshot.modulePlan);
-            const hostJob = due || continuing
-                ? ui_taskCenter.openAutoMemoryJob({
-                    label: '自动留忆',
-                    detail: continuing && due
-                        ? '上一轮没写完，这一楼到点了，重新抽。'
-                        : continuing
-                            ? '接着写没完成的一轮。'
-                            : '这一楼到点了，正在抽签。',
-                })
-                : { id: '', owned: false };
-            let result;
-            try {
-            result = await auto_memory_gate.runAutoMemoryRound({
-                snapshot, floor, memoryIds: collectMemoryIds(live), seenFloor: handledFloors.get(scope), now: Date.now(),
-                satisfiedPrerequisiteIds: satisfiedPrerequisiteIds(live),
-                archiveRevision: archive_repository.getImportedMemory(live)?.archiveRevision || 'current',
-                chatId: core_context.getChatId(live),
-            }, {
-                importIncremental: async options => {
-                    const window = options?.floorWindow;
-                    let result;
-                    if (!latestFloor || !window) result = await archive_repository.importCurrentChatMemory(options);
-                    else {
-                        const mapped = auto_memory_floor.chatRangeForAssistantSpan(live.chat, window.start, window.end);
-                        const floorWindow = mapped
-                            ? { ...mapped, latestAssistant: true, interval: snapshot.plan.intervalFloors }
-                            : { ...window, latestAssistant: true, interval: snapshot.plan.intervalFloors };
-                        result = await archive_repository.importCurrentChatMemory({ ...options, floorWindow });
+            return await auto_memory_round.withAutoMemoryRound(context, async round => {
+                const persist = next => persistSnapshot(context, next, round);
+                const due = snapshot.plan.nextDueFloor == null ? false : floor >= snapshot.plan.nextDueFloor;
+                const continuing = auto_memory_gate.modulePlanOpen(snapshot.modulePlan);
+                const hostJob = due || continuing
+                    ? ui_taskCenter.openAutoMemoryJob({
+                        label: '自动留忆',
+                        detail: continuing && due
+                            ? '上一轮没写完，这一楼到点了，重新抽。'
+                            : continuing
+                                ? '接着写没完成的一轮。'
+                                : '这一楼到点了，正在抽签。',
+                    })
+                    : { id: '', owned: false };
+                let result;
+                try {
+                    result = await auto_memory_gate.runAutoMemoryRound({
+                        snapshot, floor, memoryIds: collectMemoryIds(live), seenFloor: handledFloors.get(scope), now: Date.now(),
+                        satisfiedPrerequisiteIds: satisfiedPrerequisiteIds(live),
+                        archiveRevision: archive_repository.getImportedMemory(live)?.archiveRevision || 'current',
+                        chatId: core_context.getChatId(live),
+                    }, {
+                        importIncremental: async options => {
+                            options = { ...options, ...auto_memory_round.generationOptions(round) };
+                            const window = options?.floorWindow;
+                            let result;
+                            if (!latestFloor || !window) result = await archive_repository.importCurrentChatMemory(options);
+                            else {
+                                const mapped = auto_memory_floor.chatRangeForAssistantSpan(live.chat, window.start, window.end);
+                                const floorWindow = mapped
+                                    ? { ...mapped, latestAssistant: true, interval: snapshot.plan.intervalFloors }
+                                    : { ...window, latestAssistant: true, interval: snapshot.plan.intervalFloors };
+                                result = await archive_repository.importCurrentChatMemory({ ...options, floorWindow });
+                            }
+                            if (result?.status === 'failed' && result.error) throw result.error;
+                            auto_memory_round.acceptArchiveCommit(round, result);
+                            return result;
+                        },
+                        readMemoryIds: () => collectMemoryIds(auto_memory_round.assertAutoMemoryRound(round)),
+                        random: randomUnit,
+                        nextId: nextDrawId,
+                        prepareModulePlan: async request => {
+                            const item = auto_memory_registry.autoMemoryModuleById(request.moduleId);
+                            const facts = auto_memory_host.collectModuleFacts(request.moduleId, auto_memory_round.assertAutoMemoryRound(round), { ...request, archiveRevision: round.archiveRevision });
+                            return item?.plan?.(facts) || null;
+                        },
+                        persist,
+                        noteGap: note => writeGap(live, note, round),
+                        startModule: next => runModule(next, persist, auto_memory_round.assertAutoMemoryRound(round), round),
+                        resumeModule: current => runModule(current, persist, auto_memory_round.assertAutoMemoryRound(round), round),
+                    });
+                    auto_memory_round.assertAutoMemoryRound(round);
+                    if (['arm', 'noop', 'drawn', 'reuse', 'settled', 'failed', 'wait'].includes(result.action)) {
+                        handledFloors.set(scope, floor);
                     }
-                    if (result?.status === 'failed' && result.error) throw result.error;
-                    return result;
-                },
-                readMemoryIds: () => collectMemoryIds(core_context.currentCharacterGuard()),
-                random: randomUnit,
-                nextId: nextDrawId,
-                prepareModulePlan: async request => {
-                    const item = auto_memory_registry.autoMemoryModuleById(request.moduleId);
-                    const facts = auto_memory_host.collectModuleFacts(request.moduleId, core_context.currentCharacterGuard(), request);
-                    return item?.plan?.(facts) || null;
-                },
-                persist,
-                noteGap: note => writeGap(live, note),
-                startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
-                resumeModule: current => runModule(current, persist, core_context.currentCharacterGuard()),
+                    if (result.action === 'drawn' || result.action === 'reuse') stampDrawSource(context, result.drawId);
+                    ui_countdown.refreshAutoMemoryCountdown();
+                    finishHostJob(hostJob, result);
+                } catch (error) {
+                    if (error?.name === 'AbortError') {
+                        if (hostJob.owned) ui_taskCenter.settleAutoMemoryJob(hostJob.id, 'cancelled', '这一轮已停止，可以回到原聊天后补全。');
+                        throw error;
+                    }
+                    finishHostJob(hostJob, { action: 'failed' });
+                    console.warn('[HeartbeatMemories] due floor skipped', core_text.safeErrorDiagnostic(error));
+                    globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+                }
             });
-            if (['arm', 'noop', 'drawn', 'reuse', 'settled', 'failed', 'wait'].includes(result.action)) {
-                handledFloors.set(scope, floor);
-            }
-            if (result.action === 'drawn' || result.action === 'reuse') stampDrawSource(context, result.drawId);
-            ui_countdown.refreshAutoMemoryCountdown();
-            finishHostJob(hostJob, result);
-            } catch (error) {
-                finishHostJob(hostJob, { action: 'failed' });
-                console.warn('[HeartbeatMemories] due floor skipped', core_text.safeErrorDiagnostic(error));
-                globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
-            }
+        } catch (error) {
+            if (error?.name !== 'AbortError') throw error;
         } finally {
             inflightScopes.delete(scope);
         }
@@ -18920,43 +19477,50 @@ async function fillFloorGap() {
     fillInflight = true;
     try {
         const context = core_context.currentCharacterGuard();
-        const note = context.chatMetadata?.[auto_memory_gap.GAP_KEY];
-        const readable = auto_memory_gap.readableGap(note);
-        if (!readable?.canFill) return { action: 'idle' };
-        const messages = gapMessages(context, note);
-        if (!messages.length) {
-            context.chatMetadata[auto_memory_gap.GAP_KEY] = { ...note, filled: true };
-            await context.saveMetadataDebounced?.();
-            globalThis.toastr?.info?.('这一窗没有可以阅读的正文。', '心迹回廊');
-            return { action: 'empty' };
-        }
-        const memory = archive_repository.getImportedMemory(context);
-        if (!memory) return { action: 'idle' };
-        const titles = (memory.memories || []).map(item => item?.title).filter(Boolean);
-        const data = await generation_request.requestJson(
-            auto_memory_gap.supplementPrompt(messages, titles),
-            '看一下要不要补一条档案',
-            { automatic: true, mode: 'archive', taskKey: `auto-memory-fill:${core_context.chatScopeKey(context)}` },
-        );
-        const item = auto_memory_gap.oneSupplementMemory(data, { start: note.windowStart, end: note.windowEnd });
-        const before = new Set(collectMemoryIds(context));
-        const memories = item ? archive_external.appendImportedMemoriesStable(memory.memories, [item]) : memory.memories;
-        const added = (memories || []).map(row => row?.id).filter(id => /^M\d{3,6}$/.test(id) && !before.has(id));
-        if (!added.length) {
-            context.chatMetadata[auto_memory_gap.GAP_KEY] = { ...note, filled: true };
-            await context.saveMetadataDebounced?.();
-            globalThis.toastr?.info?.('看过这一窗，没有要补的档案。', '心迹回廊');
-            return { action: 'empty' };
-        }
-        await core_cache.saveImportedMemory(context, { ...memory, memories }, memory.chatId, {
-            preserveDerivedCache: true,
-            expectedPreviousArchiveState: { present: true, revision: memory.archiveRevision || '' },
+        return await auto_memory_round.withAutoMemoryRound(context, async round => {
+            const note = context.chatMetadata?.[auto_memory_gap.GAP_KEY];
+            const readable = auto_memory_gap.readableGap(note);
+            if (!readable?.canFill) return { action: 'idle' };
+            const messages = gapMessages(context, note);
+            if (!messages.length) {
+                context.chatMetadata[auto_memory_gap.GAP_KEY] = { ...note, filled: true };
+                await context.saveMetadataDebounced?.();
+                auto_memory_round.assertAutoMemoryRound(round);
+                globalThis.toastr?.info?.('这一窗没有可以阅读的正文。', '心迹回廊');
+                return { action: 'empty' };
+            }
+            const memory = archive_repository.getImportedMemory(context);
+            if (!memory) return { action: 'idle' };
+            const titles = (memory.memories || []).map(item => item?.title).filter(Boolean);
+            const data = await generation_request.requestJson(
+                auto_memory_gap.supplementPrompt(messages, titles),
+                '看一下要不要补一条档案',
+                { ...auto_memory_round.generationOptions(round), automatic: true, mode: 'archive', taskKey: `auto-memory-fill:${core_context.chatScopeKey(context)}` },
+            );
+            auto_memory_round.assertAutoMemoryRound(round);
+            const item = auto_memory_gap.oneSupplementMemory(data, { start: note.windowStart, end: note.windowEnd });
+            const before = new Set(collectMemoryIds(context));
+            const memories = item ? archive_external.appendImportedMemoriesStable(memory.memories, [item]) : memory.memories;
+            const added = (memories || []).map(row => row?.id).filter(id => /^M\d{3,6}$/.test(id) && !before.has(id));
+            if (!added.length) {
+                context.chatMetadata[auto_memory_gap.GAP_KEY] = { ...note, filled: true };
+                await context.saveMetadataDebounced?.();
+                auto_memory_round.assertAutoMemoryRound(round);
+                globalThis.toastr?.info?.('看过这一窗，没有要补的档案。', '心迹回廊');
+                return { action: 'empty' };
+            }
+            await core_cache.saveImportedMemory(context, { ...memory, memories }, memory.chatId, {
+                assertTaskCurrent: () => auto_memory_round.assertAutoMemoryRound(round),
+                preserveDerivedCache: true,
+                expectedPreviousArchiveState: { present: true, revision: memory.archiveRevision || '' },
         });
+        auto_memory_round.assertAutoMemoryRound(round);
         delete context.chatMetadata[auto_memory_gap.GAP_KEY];
         await context.saveMetadataDebounced?.();
+        auto_memory_round.assertAutoMemoryRound(round);
         const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
         const live = core_context.currentCharacterGuard();
-        const persist = next => persistSnapshot(live, next);
+        const persist = next => persistSnapshot(live, next, round);
         const drawn = await auto_memory_gate.drawKnownMemories({
             snapshot, freshIds: added, floor: note.floor, now: Date.now(),
             satisfiedPrerequisiteIds: satisfiedPrerequisiteIds(live),
@@ -18964,20 +19528,23 @@ async function fillFloorGap() {
             chatId: core_context.getChatId(live),
         }, {
             persist,
-            noteGap: () => writeGap(live, null),
+            noteGap: () => writeGap(live, null, round),
             random: randomUnit,
             nextId: nextDrawId,
             prepareModulePlan: async request => {
                 const moduleItem = auto_memory_registry.autoMemoryModuleById(request.moduleId);
-                const facts = auto_memory_host.collectModuleFacts(request.moduleId, core_context.currentCharacterGuard(), request);
+                const facts = auto_memory_host.collectModuleFacts(request.moduleId, auto_memory_round.assertAutoMemoryRound(round), { ...request, archiveRevision: round.archiveRevision });
                 return moduleItem?.plan?.(facts) || null;
             },
-            startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
+            startModule: next => runModule(next, persist, auto_memory_round.assertAutoMemoryRound(round), round),
         });
+        auto_memory_round.assertAutoMemoryRound(round);
         globalThis.toastr?.success?.(added.length ? `补上了 ${added[0]}。` : '这一窗已经看过。', '心迹回廊');
         ui_countdown.refreshAutoMemoryCountdown();
         return drawn;
+        });
     } catch (error) {
+        if (error?.name === 'AbortError') return { action: 'cancelled' };
         console.warn('[HeartbeatMemories] gap fill skipped', core_text.safeErrorDiagnostic(error));
         globalThis.toastr?.error?.('这一次没能补上。档案还在，可以再点一次补。', '心口顿了一下');
         return { action: 'failed' };
@@ -19010,10 +19577,13 @@ async function completeFloorRound() {
     const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (auto_memory_gate.shouldRetryDueRound(snapshot, currentPlanFloor(context, latest))) return retryDueFloor(context);
-    const rewritten = await rerollOwnedFloor(null);
-    if (rewritten) return { action: 'rerolled' };
-    if (snapshot?.modulePlan?.steps?.length) return resumeFloorPlan();
-    return regenerateCurrentMemory({ mode: 'keep' });
+    return auto_memory_round.withAutoMemoryRound(context, async round => {
+        const rewritten = await rerollOwnedFloor(null, context, round);
+        auto_memory_round.assertAutoMemoryRound(round);
+        if (rewritten) return { action: 'rerolled' };
+        if (snapshot?.modulePlan?.steps?.length) return resumeFloorPlan(context, round);
+        return regenerateCurrentMemory({ mode: 'keep' }, context, round);
+    });
 }
 
 async function retryFloorRound() {
@@ -19023,9 +19593,12 @@ async function retryFloorRound() {
     const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (auto_memory_gate.shouldRetryDueRound(snapshot, currentPlanFloor(context, latest))) return retryDueFloor(context);
-    const rewritten = await rerollOwnedFloor(null);
-    if (rewritten) return { action: 'rerolled' };
-    return regenerateCurrentMemory({ mode: 'keep' });
+    return auto_memory_round.withAutoMemoryRound(context, async round => {
+        const rewritten = await rerollOwnedFloor(null, context, round);
+        auto_memory_round.assertAutoMemoryRound(round);
+        if (rewritten) return { action: 'rerolled' };
+        return regenerateCurrentMemory({ mode: 'keep' }, context, round);
+    });
 }
 
 async function failStalledFloor() {
@@ -19053,14 +19626,14 @@ async function failStalledFloor() {
         drawTickets: snapshot.drawTickets,
         modulePlan,
     });
-    await persistSnapshot(context, next);
+    await auto_memory_round.withAutoMemoryRound(context, round => persistSnapshot(context, next, round));
     return { action: 'failed' };
 }
 
-async function resumeFloorPlanOnce(context) {
+async function resumeFloorPlanOnce(context, round) {
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (!snapshot?.modulePlan) return { action: 'idle' };
-    return withAutoMemoryJob(snapshot.modulePlan.moduleId, '接着写没完成的部分。', async () => {
+    return withAutoMemoryJob(snapshot.modulePlan.moduleId, '接着写没完成的部分。', async round => {
         // 写完却没结算的一轮只补结算，不把最后一步重发一遍。
         const unsettled = snapshot.plan.activeDrawTicketId === snapshot.modulePlan.drawId
             && snapshot.modulePlan.steps.every(step => step.status === 'completed');
@@ -19068,57 +19641,62 @@ async function resumeFloorPlanOnce(context) {
             ? snapshot.modulePlan
             : auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
         const prepared = auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan: retryPlan });
-        const persist = next => persistSnapshot(context, next);
-        const result = await runPlanToEnd(prepared, persist, context);
+        const persist = next => persistSnapshot(context, next, round);
+        const result = await runPlanToEnd(prepared, persist, context, round);
         ui_countdown.refreshAutoMemoryCountdown();
-        return followIfEnabled(context, result);
-    });
+        return followIfEnabled(context, result, round);
+    }, context, round);
 }
 
-async function resumeFloorPlan() {
-    const context = core_context.currentCharacterGuard();
+async function resumeFloorPlan(context = core_context.currentCharacterGuard(), round = null) {
     if (redoInflight) return { action: 'busy' };
     if (storyStillWriting(context)) return queueFloorRecovery('retry');
     try {
-        return await resumeFloorPlanOnce(context);
+        return await resumeFloorPlanOnce(context, round);
     } catch (error) {
         if (error?.code !== 'RMT_AUTO_MEMORY_STALE') throw error;
-        return resumeFloorPlanOnce(core_context.currentCharacterGuard());
+        if (round) auto_memory_round.assertAutoMemoryRound(round);
+        return resumeFloorPlanOnce(context, round);
     }
 }
 
-async function repairFloorAchievement(context = core_context.currentCharacterGuard()) {
-    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
-    const reveal = auto_memory_redo.pendingReveal(snapshot);
-    if (!reveal) return { action: 'idle', requests: 0 };
-    const item = auto_memory_registry.autoMemoryModuleById(reveal.moduleId);
-    const prompt = auto_memory_redo.achievementRepairPrompt({
-        moduleTitle: item?.title || reveal.moduleId,
-        sourceMemoryIds: reveal.sourceMemoryIds,
-        allowHistorical: item?.contentKind === 'historical',
-    });
-    let packet = null;
-    try {
-        const raw = await generation_request.requestJson(prompt, '补这一份成就', {
-            mode: 'auto-memory',
-            taskKey: `auto-memory-achievement:${reveal.id}`,
+async function repairFloorAchievement(context = core_context.currentCharacterGuard(), existingRound = null) {
+    return auto_memory_round.withAutoMemoryRound(context, async round => {
+        const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+        const reveal = auto_memory_redo.pendingReveal(snapshot);
+        if (!reveal) return { action: 'idle', requests: 0 };
+        const item = auto_memory_registry.autoMemoryModuleById(reveal.moduleId);
+        const prompt = auto_memory_redo.achievementRepairPrompt({
+            moduleTitle: item?.title || reveal.moduleId,
+            sourceMemoryIds: reveal.sourceMemoryIds,
+            allowHistorical: item?.contentKind === 'historical',
         });
-        packet = auto_memory_redo.achievementPacket(raw);
-    } catch (error) {
-        return { action: 'failed', requests: 1, error, snapshot };
-    }
-    const replaced = auto_memory_combined.replacePendingAchievement({
-        snapshot,
-        revealId: reveal.id,
-        packet,
-        allowHistorical: item?.contentKind === 'historical',
-        sourceMemoryIds: reveal.sourceMemoryIds,
-        now: Date.now(),
-    });
-    if (replaced.snapshot && replaced.snapshot !== snapshot) await persistSnapshot(context, replaced.snapshot);
-    await rememberTitle(context, replaced);
-    ui_countdown.refreshAutoMemoryCountdown();
-    return replaced;
+        let packet = null;
+        try {
+            const raw = await generation_request.requestJson(prompt, '补这一份成就', {
+                ...auto_memory_round.generationOptions(round),
+                mode: 'auto-memory',
+                taskKey: `auto-memory-achievement:${reveal.id}`,
+            });
+            auto_memory_round.assertAutoMemoryRound(round);
+            packet = auto_memory_redo.achievementPacket(raw);
+        } catch (error) {
+            if (error?.name === 'AbortError') throw error;
+            return { action: 'failed', requests: 1, error, snapshot };
+        }
+        const replaced = auto_memory_combined.replacePendingAchievement({
+            snapshot,
+            revealId: reveal.id,
+            packet,
+            allowHistorical: item?.contentKind === 'historical',
+            sourceMemoryIds: reveal.sourceMemoryIds,
+            now: Date.now(),
+        });
+        if (replaced.snapshot && replaced.snapshot !== snapshot) await persistSnapshot(context, replaced.snapshot, round);
+        await rememberTitle(context, replaced, round);
+        ui_countdown.refreshAutoMemoryCountdown();
+        return replaced;
+    }, existingRound);
 }
 
 async function automaticRepairIfNeeded() {
@@ -19137,7 +19715,7 @@ async function automaticRepairIfNeeded() {
     const seed = pending && !incomplete
         ? { action: 'achievement-pending', reveal: pending, snapshot }
         : { action: 'saved', snapshot };
-    const followed = await followIfEnabled(context, seed);
+    const followed = await auto_memory_round.withAutoMemoryRound(context, round => followIfEnabled(context, seed, round));
     return followed !== seed;
 }
 
@@ -19178,10 +19756,9 @@ async function noteSwipedFloor(messageId) {
 }
 
 // 抽签那一楼的正文被重 roll 或切 swipe 后：先撤回这一轮写过的回忆，再按新正文重写。间隔不往前走。
-async function rerollOwnedFloor(messageIndex) {
+async function rerollOwnedFloor(messageIndex, context = null, existingRound = null) {
     if (redoInflight || autoRepairInflight) return false;
-    let context;
-    try { context = core_context.currentCharacterGuard(); }
+    try { context = context || core_context.currentCharacterGuard(); }
     catch { return false; }
     let snapshot;
     try { snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata); }
@@ -19203,7 +19780,7 @@ async function rerollOwnedFloor(messageIndex) {
     redoInflight = true;
     const oldIds = [...(ticket.sourceMemoryIds || [])];
     try {
-        const outcome = await withAutoMemoryJob(modulePlan.moduleId, '按新正文重写这一轮。', async () => {
+        const outcome = await withAutoMemoryJob(modulePlan.moduleId, '按新正文重写这一轮。', async round => {
         context.chatMetadata[auto_memory_redo.SOURCE_STAMP_KEY] = {
             drawId: ticket.id,
             dueFloor: ticket.dueFloor,
@@ -19244,7 +19821,7 @@ async function rerollOwnedFloor(messageIndex) {
                 : row)),
             modulePlan: auto_memory_plan.parseModulePlan(auto_memory_redo.resetModuleSteps({ ...modulePlan, frozenAt })),
         });
-        await persistSnapshot(context, withdrawn);
+        await persistSnapshot(context, withdrawn, round);
         if (stripped) {
             stripped.chatId = core_context.getChatId(context);
             if (memory?.archiveRevision) stripped.archiveRevision = memory.archiveRevision;
@@ -19253,9 +19830,11 @@ async function rerollOwnedFloor(messageIndex) {
         if (memory && oldIds.length) {
             const memories = auto_memory_redo.memoriesWithoutIds(memory.memories, oldIds);
             await core_cache.saveImportedMemory(context, { ...memory, memories }, memory.chatId, {
+                assertTaskCurrent: () => auto_memory_round.assertAutoMemoryRound(round),
                 preserveDerivedCache: true,
                 expectedPreviousArchiveState: { present: true, revision: memory.archiveRevision || '' },
             });
+            auto_memory_round.assertAutoMemoryRound(round);
         }
         const window = auto_memory_redo.rerollWindow(ticket.dueFloor, snapshot.plan.intervalFloors);
         const before = new Set(collectMemoryIds(context));
@@ -19267,7 +19846,8 @@ async function rerollOwnedFloor(messageIndex) {
                     ? { ...mapped, latestAssistant: true, interval: snapshot.plan.intervalFloors }
                     : { ...window, latestAssistant: true, interval: snapshot.plan.intervalFloors };
             }
-            await archive_repository.importCurrentChatMemory(options);
+            const imported = await archive_repository.importCurrentChatMemory({ ...options, ...auto_memory_round.generationOptions(round) });
+            auto_memory_round.acceptArchiveCommit(round, imported);
         }
         const fresh = auto_memory_draw.newMemoryIds([...before], collectMemoryIds(context));
         const liveMemory = archive_repository.getImportedMemory(context);
@@ -19291,7 +19871,7 @@ async function rerollOwnedFloor(messageIndex) {
                     : row)),
                 modulePlan: null,
             });
-            await persistSnapshot(context, idle);
+            await persistSnapshot(context, idle, round);
             globalThis.toastr?.info?.('这一楼的正文换了，旧回忆已经撤回。这一窗没有新的档案。', '心迹回廊');
             ui_countdown.refreshAutoMemoryCountdown();
             return true;
@@ -19305,36 +19885,39 @@ async function rerollOwnedFloor(messageIndex) {
             }),
             revealRecords,
             drawTickets: withdrawn.drawTickets.map(row => (row.id === ticket.id
-                ? auto_memory_plan.parseDrawTicket({ ...row, sourceMemoryIds: fresh, status: 'drawn' })
+                ? auto_memory_plan.parseDrawTicket({ ...row, archiveRevision: round.archiveRevision, sourceMemoryIds: fresh, status: 'drawn' })
                 : row)),
             modulePlan: auto_memory_plan.parseModulePlan({
                 ...withdrawn.modulePlan,
+                archiveRevision: round.archiveRevision,
                 sourceMemoryIds: fresh,
             }),
         });
-        await persistSnapshot(context, next);
-        const persist = step => persistSnapshot(context, step);
-        const result = await runPlanToEnd(next, persist, context);
+        await persistSnapshot(context, next, round);
+        const persist = step => persistSnapshot(context, step, round);
+        const result = await runPlanToEnd(next, persist, context, round);
         ui_countdown.refreshAutoMemoryCountdown();
-        await followIfEnabled(context, result);
+        await followIfEnabled(context, result, round);
         return result || true;
-        });
+        }, context, existingRound);
         return outcome?.action === 'failed' ? true : !!outcome;
     } finally {
         redoInflight = false;
     }
 }
 
-async function installRedraw(context, snapshot, ticket, moduleId) {
+async function installRedraw(context, snapshot, ticket, moduleId, round) {
+    auto_memory_round.assertAutoMemoryRound(round);
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
     if (!item?.inDrawPool) return null;
     const facts = auto_memory_host.collectModuleFacts(moduleId, context, {
         chatId: core_context.getChatId(context),
-        archiveRevision: ticket.archiveRevision,
+        archiveRevision: round.archiveRevision,
         sourceMemoryIds: ticket.sourceMemoryIds,
         drawId: ticket.id,
     });
     const built = await item.plan?.(facts);
+    auto_memory_round.assertAutoMemoryRound(round);
     if (!built?.steps?.length) return null;
     const modulePlan = auto_memory_plan.parseModulePlan(auto_memory_redo.resetModuleSteps({
         ...built,
@@ -19346,7 +19929,7 @@ async function installRedraw(context, snapshot, ticket, moduleId) {
         ? ticket.candidates
         : [...ticket.candidates, { id: moduleId, weight: 1 }];
     const nextTicket = auto_memory_plan.parseDrawTicket({
-        ...ticket, candidates, selectedModuleId: moduleId, status: 'drawn',
+        ...ticket, archiveRevision: round.archiveRevision, candidates, selectedModuleId: moduleId, status: 'drawn',
     });
     return auto_memory_plan.parseAutoMemorySnapshot({
         plan: auto_memory_plan.parseAutoMemoryPlan({
@@ -19361,11 +19944,10 @@ async function installRedraw(context, snapshot, ticket, moduleId) {
     });
 }
 
-async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } = {}) {
+async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } = {}, context = core_context.currentCharacterGuard(), existingRound = null) {
     if (redoInflight) return { action: 'busy' };
     redoInflight = true;
     try {
-        const context = core_context.currentCharacterGuard();
         const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
         const ticket = auto_memory_redo.currentDrawTicket(snapshot);
         if (!snapshot?.plan?.enabled || !ticket) return { action: 'idle' };
@@ -19380,7 +19962,7 @@ async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } = {}) {
             selected = moduleId;
         }
         if (!selected) return { action: 'idle' };
-        return await withAutoMemoryJob(selected, '补上没写完的这一轮。', async () => {
+        return await withAutoMemoryJob(selected, '补上没写完的这一轮。', async round => {
         const keepPlan = mode === 'keep' && snapshot.modulePlan?.drawId === ticket.id
             ? auto_memory_plan.parseModulePlan(auto_memory_redo.resetModuleSteps(snapshot.modulePlan))
             : null;
@@ -19398,16 +19980,17 @@ async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } = {}) {
                     : row)),
                 modulePlan: keepPlan,
             })
-            : await installRedraw(context, snapshot, ticket, selected);
+            : await installRedraw(context, snapshot, ticket, selected, round);
         if (!next) return { action: 'idle' };
-        const persist = step => persistSnapshot(context, step);
+        const persist = step => persistSnapshot(context, step, round);
         await persist(next);
         stampDrawSource(context, ticket.id);
-        const result = await runPlanToEnd(next, persist, context);
+        const result = await runPlanToEnd(next, persist, context, round);
         ui_countdown.refreshAutoMemoryCountdown();
-        return followIfEnabled(context, result);
-        });
+        return followIfEnabled(context, result, round);
+        }, context, existingRound);
     } catch (error) {
+        if (error?.name === 'AbortError') throw error;
         console.warn('[HeartbeatMemories] memory redo skipped', core_text.safeErrorDiagnostic(error));
         return { action: 'failed', error };
     } finally {
@@ -19424,6 +20007,7 @@ function nudgeAutoMemoryScheduler() {
 }
 
 function stopAutoMemoryScheduler() {
+    auto_memory_round.cancelAutoMemoryRounds();
     cleanup?.();
     cleanup = null;
     if (quietTimer) clearTimeout(quietTimer);
@@ -19438,6 +20022,10 @@ function stopAutoMemoryScheduler() {
     inflightScopes.clear();
     noticedGroups.clear();
     autoUsed.clear();
+}
+
+function reportSchedulerFailure(error) {
+    if (error?.name !== 'AbortError') console.warn('[HeartbeatMemories] auto memory stopped', core_text.safeErrorDiagnostic(error));
 }
 
 function scheduleSettledRound() {
@@ -19481,11 +20069,12 @@ function scheduleSettledRound() {
         settleWaits = 0;
         lastSignature = signature;
         if (!ready) return;
-        void settleReadyRound();
+        void settleReadyRound().catch(reportSchedulerFailure);
     }, 800);
 }
 
-async function stripLostRound(context, { moduleId = '', sourceMemoryIds = [], createdAt = 0, frozenAt = 0, messageIndex = null } = {}) {
+async function stripLostRound(context, { moduleId = '', sourceMemoryIds = [], createdAt = 0, frozenAt = 0, messageIndex = null } = {}, round) {
+    auto_memory_round.assertAutoMemoryRound(round);
     const oldIds = [...(Array.isArray(sourceMemoryIds) ? sourceMemoryIds : [])].filter(id => /^M\d{3,6}$/.test(id));
     let memory = null;
     try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
@@ -19506,9 +20095,11 @@ async function stripLostRound(context, { moduleId = '', sourceMemoryIds = [], cr
     if (memory && oldIds.length) {
         const memories = auto_memory_redo.memoriesWithoutIds(memory.memories, oldIds);
         await core_cache.saveImportedMemory(context, { ...memory, memories }, memory.chatId, {
+            assertTaskCurrent: () => auto_memory_round.assertAutoMemoryRound(round),
             preserveDerivedCache: true,
             expectedPreviousArchiveState: { present: true, revision: memory.archiveRevision || '' },
         });
+        auto_memory_round.assertAutoMemoryRound(round);
     }
 }
 
@@ -19518,96 +20109,99 @@ async function sweepLostLetters(context) {
     try { snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata); }
     catch { return false; }
     if (!snapshot?.plan?.enabled) return false;
-    let latest = false;
-    try { latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true; }
-    catch { latest = false; }
-    const stamp = context.chatMetadata?.[auto_memory_redo.SOURCE_STAMP_KEY] || null;
-    const lost = [];
-    const seenTickets = new Set();
-    let pinsChanged = false;
-    for (const reveal of snapshot.revealRecords || []) {
-        const ticket = auto_memory_redo.ticketMatchingReveal(snapshot, reveal);
-        const drawId = ticket?.id || '';
-        if (drawId && auto_memory_redo.findDrawMessage(context.chat, drawId)) continue;
-        const mesid = auto_memory_redo.ticketLetterMesid(context.chat, ticket, latest, stamp);
-        const message = mesid == null ? null : context.chat?.[mesid];
-        const pinLost = !!(drawId && auto_memory_redo.drawRoundLost(context, drawId, message));
-        const bodyGone = mesid != null && auto_memory_redo.letterBodyGone(context.chat, mesid);
-        if (!pinLost && !bodyGone) {
-            if (drawId && message) {
-                const pin = auto_memory_redo.rememberDrawPin(context, drawId, message);
-                if (pin === 'changed') pinsChanged = true;
+    return auto_memory_round.withAutoMemoryRound(context, async round => {
+        let latest = false;
+        try { latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true; }
+        catch { latest = false; }
+        const stamp = context.chatMetadata?.[auto_memory_redo.SOURCE_STAMP_KEY] || null;
+        const lost = [];
+        const seenTickets = new Set();
+        let pinsChanged = false;
+        for (const reveal of snapshot.revealRecords || []) {
+            const ticket = auto_memory_redo.ticketMatchingReveal(snapshot, reveal);
+            const drawId = ticket?.id || '';
+            if (drawId && auto_memory_redo.findDrawMessage(context.chat, drawId)) continue;
+            const mesid = auto_memory_redo.ticketLetterMesid(context.chat, ticket, latest, stamp);
+            const message = mesid == null ? null : context.chat?.[mesid];
+            const pinLost = !!(drawId && auto_memory_redo.drawRoundLost(context, drawId, message));
+            const bodyGone = mesid != null && auto_memory_redo.letterBodyGone(context.chat, mesid);
+            if (!pinLost && !bodyGone) {
+                if (drawId && message) {
+                    const pin = auto_memory_redo.rememberDrawPin(context, drawId, message);
+                    if (pin === 'changed') pinsChanged = true;
+                }
+                continue;
             }
-            continue;
+            if (drawId && seenTickets.has(drawId)) continue;
+            if (drawId) seenTickets.add(drawId);
+            lost.push({
+                reveal,
+                ticket,
+                mesid: pinLost ? null : mesid,
+                pinLost,
+                sourceMemoryIds: ticket?.sourceMemoryIds || reveal.sourceMemoryIds || [],
+            });
         }
-        if (drawId && seenTickets.has(drawId)) continue;
-        if (drawId) seenTickets.add(drawId);
-        lost.push({
-            reveal,
-            ticket,
-            mesid: pinLost ? null : mesid,
-            pinLost,
-            sourceMemoryIds: ticket?.sourceMemoryIds || reveal.sourceMemoryIds || [],
-        });
-    }
-    if (pinsChanged) {
-        context.saveChatDebounced?.();
-        context.saveMetadataDebounced?.();
-    }
-    let memory = null;
-    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
-    const library = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
-    const covered = new Set(lost.map(row => row.mesid));
-    for (const entry of Array.isArray(library?.entries) ? library.entries : []) {
-        if (entry?.origin !== 'auto') continue;
-        const mesid = auto_memory_lookback.autoLetterMesid(entry, {
-            snapshot,
-            chat: context.chat,
-            latestFloor: latest,
-            locate: auto_memory_redo.drawFloorMessage,
-        }) ?? (Number.isSafeInteger(Math.floor(Number(entry.messageIndex))) ? Math.floor(Number(entry.messageIndex)) : null);
-        if (mesid == null || covered.has(mesid) || !auto_memory_lookback.autoLetterOrphaned(entry, context.chat, { messageIndex: mesid })) continue;
-        lost.push({
-            reveal: null,
-            ticket: null,
-            mesid,
-            moduleId: entry.moduleId,
-            sourceMemoryIds: entry.sourceMemoryIds || [],
-        });
-        covered.add(mesid);
-    }
-    if (!lost.length) return false;
-    for (const row of lost) {
-        await stripLostRound(context, {
-            moduleId: row.ticket?.selectedModuleId || row.reveal?.moduleId || row.moduleId || '',
-            sourceMemoryIds: row.sourceMemoryIds,
-            createdAt: row.reveal?.createdAt || 0,
-            frozenAt: snapshot.modulePlan?.drawId === row.ticket?.id ? snapshot.modulePlan.frozenAt : 0,
-            messageIndex: row.pinLost ? null : row.mesid,
-        });
-        if (row.ticket?.id) auto_memory_redo.forgetDrawPin(context.chatMetadata, row.ticket.id);
-        if (stamp?.drawId && stamp.drawId === row.ticket?.id) delete context.chatMetadata[auto_memory_redo.SOURCE_STAMP_KEY];
-    }
-    const dropReveal = new Set(lost.map(row => row.reveal?.id).filter(Boolean));
-    const dropTicket = new Set(lost.map(row => row.ticket?.id).filter(Boolean));
-    const clearActive = dropTicket.has(snapshot.plan.activeDrawTicketId);
-    const next = auto_memory_plan.parseAutoMemorySnapshot({
-        plan: auto_memory_plan.parseAutoMemoryPlan({
-            ...snapshot.plan,
-            revision: snapshot.plan.revision + 1,
-            updatedAt: Date.now(),
-            activeDrawTicketId: clearActive ? null : snapshot.plan.activeDrawTicketId,
-        }),
-        revealRecords: snapshot.revealRecords.filter(row => !dropReveal.has(row.id)),
-        drawTickets: snapshot.drawTickets.map(row => (dropTicket.has(row.id)
-            ? auto_memory_plan.parseDrawTicket({ ...row, status: 'completed' })
-            : row)),
-        modulePlan: clearActive ? null : snapshot.modulePlan,
+        if (pinsChanged) {
+            context.saveChatDebounced?.();
+            context.saveMetadataDebounced?.();
+        }
+        let memory = null;
+        try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+        const library = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
+        const covered = new Set(lost.map(row => row.mesid));
+        for (const entry of Array.isArray(library?.entries) ? library.entries : []) {
+            if (entry?.origin !== 'auto') continue;
+            const mesid = auto_memory_lookback.autoLetterMesid(entry, {
+                snapshot,
+                chat: context.chat,
+                latestFloor: latest,
+                locate: auto_memory_redo.drawFloorMessage,
+            }) ?? (Number.isSafeInteger(Math.floor(Number(entry.messageIndex))) ? Math.floor(Number(entry.messageIndex)) : null);
+            if (mesid == null || covered.has(mesid) || !auto_memory_lookback.autoLetterOrphaned(entry, context.chat, { messageIndex: mesid })) continue;
+            lost.push({
+                reveal: null,
+                ticket: null,
+                mesid,
+                moduleId: entry.moduleId,
+                sourceMemoryIds: entry.sourceMemoryIds || [],
+            });
+            covered.add(mesid);
+        }
+        if (!lost.length) return false;
+        for (const row of lost) {
+            await stripLostRound(context, {
+                moduleId: row.ticket?.selectedModuleId || row.reveal?.moduleId || row.moduleId || '',
+                sourceMemoryIds: row.sourceMemoryIds,
+                createdAt: row.reveal?.createdAt || 0,
+                frozenAt: snapshot.modulePlan?.drawId === row.ticket?.id ? snapshot.modulePlan.frozenAt : 0,
+                messageIndex: row.pinLost ? null : row.mesid,
+            }, round);
+            auto_memory_round.assertAutoMemoryRound(round);
+            if (row.ticket?.id) auto_memory_redo.forgetDrawPin(context.chatMetadata, row.ticket.id);
+            if (stamp?.drawId && stamp.drawId === row.ticket?.id) delete context.chatMetadata[auto_memory_redo.SOURCE_STAMP_KEY];
+        }
+        const dropReveal = new Set(lost.map(row => row.reveal?.id).filter(Boolean));
+        const dropTicket = new Set(lost.map(row => row.ticket?.id).filter(Boolean));
+        const clearActive = dropTicket.has(snapshot.plan.activeDrawTicketId);
+        const next = auto_memory_plan.parseAutoMemorySnapshot({
+            plan: auto_memory_plan.parseAutoMemoryPlan({
+                ...snapshot.plan,
+                revision: snapshot.plan.revision + 1,
+                updatedAt: Date.now(),
+                activeDrawTicketId: clearActive ? null : snapshot.plan.activeDrawTicketId,
+            }),
+            revealRecords: snapshot.revealRecords.filter(row => !dropReveal.has(row.id)),
+            drawTickets: snapshot.drawTickets.map(row => (dropTicket.has(row.id)
+                ? auto_memory_plan.parseDrawTicket({ ...row, status: 'completed' })
+                : row)),
+            modulePlan: clearActive ? null : snapshot.modulePlan,
     });
-    await persistSnapshot(context, next);
+    await persistSnapshot(context, next, round);
     try { ui_taskCenter.clearAutoMemoryFloorFailure(); } catch { /* 任务条稍后还会刷。 */ }
     globalThis.toastr?.info?.('这一楼的正文已经没了，那一轮的回忆和成就一起收走了。', '心迹回廊');
     return true;
+    });
 }
 
 async function settleReadyRound() {
@@ -19617,7 +20211,14 @@ async function settleReadyRound() {
         scheduleSettledRound();
         return;
     }
-    if (await sweepLostLetters(context)) ui_countdown.refreshAutoMemoryCountdown();
+    const origin = context ? core_context.captureTaskOrigin(context) : null;
+    try {
+        if (await sweepLostLetters(context)) ui_countdown.refreshAutoMemoryCountdown();
+    } catch (error) {
+        if (error?.name === 'AbortError') return;
+        throw error;
+    }
+    if (!auto_memory_round.autoMemoryOriginCurrent(context, origin)) return;
     if (!auto_memory_floor.assistantBodyReady(context?.chat, { generating: false })) return;
     if (sameFloor.pending()) {
         if (redoInflight || inflightScopes.size) {
@@ -19625,6 +20226,7 @@ async function settleReadyRound() {
             return;
         }
         const ran = await rerollOwnedFloor(null);
+        if (!auto_memory_round.autoMemoryOriginCurrent(context, origin)) return;
         sameFloor.consume();
         floorRecovery = '';
         if (ran) return;
@@ -19643,7 +20245,7 @@ async function settleReadyRound() {
         await completeFloorRound();
         return;
     }
-    void runHostRound();
+    void runHostRound().catch(reportSchedulerFailure);
 }
 
 function startAutoMemoryScheduler() {
@@ -19671,6 +20273,12 @@ function startAutoMemoryScheduler() {
     const listener = (type, ...args) => {
         const starting = type === types.GENERATION_STARTED || type === types.STREAM_TOKEN_RECEIVED || type === types.STREAM_TOKEN_RECEIVED_FULLY;
         const ended = type === types.GENERATION_ENDED || type === types.GENERATION_STOPPED;
+        if (type === types.CHAT_CHANGED || type === types.CHAT_LOADED) {
+            auto_memory_round.cancelAutoMemoryRounds();
+            sameFloor.clear();
+            floorRecovery = '';
+            auto_memory_stream.noteAssistantStream(false);
+        }
         if (type === types.GENERATION_STOPPED) {
             sameFloor.clear();
             floorRecovery = '';
@@ -19694,7 +20302,7 @@ function startAutoMemoryScheduler() {
         source.on(type, handler);
     }
     if (types.MESSAGE_SWIPED) {
-        const swiped = messageId => { void noteSwipedFloor(messageId); };
+        const swiped = messageId => { void noteSwipedFloor(messageId).catch(reportSchedulerFailure); };
         bound.set(types.MESSAGE_SWIPED, swiped);
         source.on(types.MESSAGE_SWIPED, swiped);
     }
@@ -31860,26 +32468,132 @@ const composer = __m_core_generationOptions_js;
 
 
 const choices = new Map();
-const strategies = ['default', 'specified', 'random', 'ensemble'];
-function key(route, context, memory) { return `hearttraceRoutePeopleV1:${composer.composerScope(context, memory)}:${route}`; }
-function readRoutePeople(route, context, memory, storage = globalThis.localStorage) {
-    const id = key(route, context, memory);
-    try { return normalizeChoice(JSON.parse(storage?.getItem(id) || choices.get(id) || '{}')); }
-    catch { try { return normalizeChoice(JSON.parse(choices.get(id) || '{}')); } catch { return normalizeChoice({}); } }
+const strategies = ['default', 'archive', 'specified', 'random', 'ensemble'];
+const LEGACY_PREFIX = 'hearttraceRoutePeopleV1:';
+function storageOrDefault(storage) {
+    if (storage !== undefined) return storage;
+    try { return globalThis.localStorage; } catch { return null; }
+}
+function archiveCreatedAt(memory) {
+    const value = Number(memory?.createdAt);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+}
+function key(route, context, memory) {
+    // An increment changes archiveRevision, but keeps createdAt. A newly created
+    // archive must not inherit the deleted archive's page-level selections.
+    const lifetime = archiveCreatedAt(memory) || `revision:${memory?.archiveRevision || ''}`;
+    return `hearttraceRoutePeopleV2:${JSON.stringify([contextApi.currentCharacterRuntimeKey(context), memory?.chatId, lifetime])}:${route}`;
+}
+function parseChoice(encoded) {
+    if (!encoded) return null;
+    try {
+        const value = JSON.parse(encoded);
+        return value && typeof value === 'object' && strategies.includes(value.strategy) ? normalizeChoice(value) : null;
+    } catch { return null; }
+}
+function revisionTime(revision) {
+    const match = /^(\d+)-/.exec(String(revision || ''));
+    return match ? Number(match[1]) : 0;
+}
+function legacyChoice(route, context, memory, storage) {
+    const exact = parseChoice(storage?.getItem(`${LEGACY_PREFIX}${composer.composerScope(context, memory)}:${route}`));
+    if (exact) return exact;
+    const createdAt = archiveCreatedAt(memory), currentTime = revisionTime(memory?.archiveRevision);
+    if (!createdAt || currentTime < createdAt) return null;
+    const character = contextApi.currentCharacterRuntimeKey(context), suffix = `:${route}`;
+    let latestTime = 0, latest = null, ambiguous = false;
+    for (let i = 0; i < (storage?.length || 0); i++) {
+        const candidateKey = storage.key(i);
+        if (!candidateKey?.startsWith(LEGACY_PREFIX) || !candidateKey.endsWith(suffix)) continue;
+        let scope;
+        try { scope = JSON.parse(candidateKey.slice(LEGACY_PREFIX.length, -suffix.length)); } catch { continue; }
+        if (!Array.isArray(scope) || scope.length !== 3 || scope[0] !== character || scope[1] !== (memory?.chatId ?? null)) continue;
+        const time = revisionTime(scope[2]);
+        if (time < createdAt || time > currentTime || time < latestTime) continue;
+        const value = parseChoice(storage.getItem(candidateKey));
+        if (!value) continue;
+        if (time > latestTime) { latestTime = time; latest = value; ambiguous = false; }
+        else if (JSON.stringify(value) !== JSON.stringify(latest)) ambiguous = true;
+    }
+    return ambiguous ? null : latest;
+}
+function readRoutePeople(route, context, memory, storage) {
+    const id = key(route, context, memory), transient = parseChoice(choices.get(id));
+    // A quota/permission failure must not let the older disk value override the
+    // choice the user just made in this session.
+    if (transient) return transient;
+    storage = storageOrDefault(storage);
+    try {
+        const saved = parseChoice(storage?.getItem(id));
+        if (saved) return saved;
+        const restored = legacyChoice(route, context, memory, storage);
+        if (restored) {
+            writeRoutePeople(route, restored, context, memory, storage);
+            return restored;
+        }
+    } catch { /* Storage can be unavailable; leave legacy records untouched. */ }
+    return normalizeChoice({});
 }
 function normalizeChoice(value) {
     return { strategy: strategies.includes(value?.strategy) ? value.strategy : 'default',
         selectedIds: [...new Set((Array.isArray(value?.selectedIds) ? value.selectedIds : []).filter(id => typeof id === 'string'))] };
 }
-function writeRoutePeople(route, value, context, memory, storage = globalThis.localStorage) {
+function writeRoutePeople(route, value, context, memory, storage) {
     const id = key(route, context, memory), encoded = JSON.stringify(normalizeChoice(value));
     choices.set(id, encoded);
-    try { storage?.setItem(id, encoded); } catch { /* Still usable for this session. */ }
+    try {
+        storage = storageOrDefault(storage);
+        if (!storage?.setItem) return false;
+        storage.setItem(id, encoded);
+        choices.delete(id);
+        return true;
+    } catch { return false; /* Still usable for this session. */ }
 }
+// 「按档案剧情」：只取档案记忆里真的出场过的人物。建档时勾了、但剧情里还没登场的人不算。
+// 先看每条记忆写明的参与者，再在标题、摘要和锚点里找名字或世界书关键词。
+function castTerms(person) {
+    const terms = new Set();
+    const add = value => {
+        const term = String(value || '').replace(/\s+/g, '').toLowerCase();
+        // 一个字或两个字母太容易误中，不拿来找。
+        if (Array.from(term).length >= 2 && !/^[a-z0-9]{1,2}$/.test(term)) terms.add(term);
+    };
+    add(person.name);
+    for (const part of String(person.name || '').split(/[·・•\s/()（）「」【】]+/)) add(part);
+    for (const ref of person.sourceRefs || []) for (const keyword of ref.keys || []) add(keyword);
+    return [...terms];
+}
+function memoryCastText(item) {
+    const parts = [];
+    for (const field of ['title', 'summary']) if (typeof item?.[field] === 'string') parts.push(item[field]);
+    for (const field of ['anchors', 'participants']) if (Array.isArray(item?.[field])) parts.push(...item[field].filter(value => typeof value === 'string'));
+    return parts.join('\n').replace(/\s+/g, '').toLowerCase();
+}
+function archiveCastIds(roster, memory) {
+    const normalized = participants.normalizeParticipantRoster(roster);
+    if (!normalized) return [];
+    const items = Array.isArray(memory?.memories) ? memory.memories : [];
+    const named = new Set(), texts = [];
+    for (const item of items) {
+        for (const name of Array.isArray(item?.participants) ? item.participants : []) {
+            if (typeof name === 'string' && name.trim()) named.add(name.replace(/\s+/g, '').toLowerCase());
+        }
+        texts.push(memoryCastText(item));
+    }
+    const text = texts.join('\n');
+    return normalized.people.filter(person => person.identity !== 'user').filter(person => {
+        const terms = castTerms(person);
+        const fullName = String(person.name || '').replace(/\s+/g, '').toLowerCase();
+        // 记忆里只写了名字的一部分（比如只写名不写姓）也算。
+        return terms.some(term => named.has(term) || text.includes(term))
+            || [...named].some(name => Array.from(name).length >= 2 && fullName.includes(name));
+    }).map(person => person.id);
+}
+
 // Resolve once at the click/queue boundary. Persist the resulting snapshot with
 // the task; a retry must never draw a second random person or read a new choice.
 function captureRoutePeople(route, context = contextApi.getContext(), memory = repository.getImportedMemory(context),
-    { storage = globalThis.localStorage, random = Math.random } = {}) {
+    { storage, random = Math.random } = {}) {
     const roster = participants.normalizeParticipantRoster(memory?.[participants.PARTICIPANTS_KEY]);
     if (!roster) return null;
     const choice = readRoutePeople(route, context, memory, storage);
@@ -31887,6 +32601,10 @@ function captureRoutePeople(route, context = contextApi.getContext(), memory = r
     const candidates = roster.people.filter(person => person.identity !== 'user');
     let selectedIds = choice.selectedIds;
     if (choice.strategy === 'ensemble') selectedIds = candidates.map(person => person.id);
+    else if (choice.strategy === 'archive') {
+        selectedIds = archiveCastIds(roster, memory);
+        if (!selectedIds.length) throw new Error('档案记忆里还没有找到名单里的人物出场。可以改为指定人物，或沿用档案人物。');
+    }
     else if (choice.strategy === 'random') selectedIds = candidates.length ? [candidates[Math.min(candidates.length - 1, Math.floor(Math.max(0, random()) * candidates.length))].id] : [];
     if (!selectedIds.length) throw new Error('请先为这一页勾选人物，或改为沿用档案人物。');
     if (selectedIds.some(id => !roster.people.some(person => person.id === id))) throw new Error('这一页选择的人物已不在当前档案中，请重新选择。');
@@ -31895,6 +32613,7 @@ function captureRoutePeople(route, context = contextApi.getContext(), memory = r
 
 __m_core_routeParticipants_js.readRoutePeople = readRoutePeople;
 __m_core_routeParticipants_js.writeRoutePeople = writeRoutePeople;
+__m_core_routeParticipants_js.archiveCastIds = archiveCastIds;
 __m_core_routeParticipants_js.captureRoutePeople = captureRoutePeople;
 }
 
@@ -31903,9 +32622,10 @@ function __init_core_selfUpdater_js() {
 const RELEASE_README = __m_core_releaseNotes_js.RELEASE_README;
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.52';
+const INSTALLED_BUILD = '1.0.59-r1';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
-function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
+const localUpdateErrors = new WeakSet();
+function updateError(message) { const error = new Error(message); error.userMessage = message; localUpdateErrors.add(error); return error; }
 
 function installation(moduleUrl, origin) {
     const url = new URL(moduleUrl);
@@ -31950,7 +32670,7 @@ async function updateSelf({ moduleUrl = import.meta.url, origin = globalThis.loc
                     : `宿主更新接口返回 HTTP ${response.status}；请检查 Git、网络及服务器日志。`);
                 return await response.json();
             } catch (error) {
-                if (error?.userMessage) throw error;
+                if (localUpdateErrors.has(error)) throw error;
                 throw updateError(controller.signal.aborted ? '请求超时，服务器可能仍在更新；请稍后检查版本，不要连续重试。' : '更新请求未完成；请检查网络或宿主支持情况。');
             } finally { clearTimeout(timer); }
         };
@@ -31971,7 +32691,7 @@ async function updateSelf({ moduleUrl = import.meta.url, origin = globalThis.loc
             if (!isProjectRemote(verified?.remoteUrl) || !String(verified?.currentCommitHash || '').startsWith(result.shortCommitHash) || verified.isUpToDate !== true) throw updateError('服务器返回的更新结果尚未确认，请在扩展管理中检查；不要重复点击更新。');
             return { message: `已更新${branch} · 提交 ${result.shortCommitHash}。当前页面仍运行 ${installedVersion()}，保存聊天后刷新以加载新版。` };
         } catch (error) {
-            if (error?.userMessage) throw error;
+            if (localUpdateErrors.has(error)) throw error;
             throw updateError('更新结果尚未确认，请在扩展管理中检查。');
         }
     })();
@@ -32225,7 +32945,7 @@ async function checkHearttraceUpdate({ force = false, moduleUrl = import.meta.ur
             });
             return hearttraceUpdateSnapshot();
         } catch (error) {
-            if (sequence === checkSequence) publishUpdate({ status: 'unknown', message: String(error?.userMessage || error?.message || '没能完成检测，请稍后再试。') });
+            if (sequence === checkSequence) publishUpdate({ status: 'unknown', message: localUpdateErrors.has(error) ? error.userMessage : '没能完成检测，请稍后再试。' });
             return hearttraceUpdateSnapshot();
         } finally {
             checkingPromise = null;
@@ -32242,8 +32962,12 @@ function resolveHostFn(name) {
 }
 
 function looksLikeGitPullBlocked(error, status = 0, detail = '') {
-    const text = `${detail} ${error instanceof Error ? error.message : String(error || '')}`;
-    return status === 500 || error?.status === 500 || /not valid JSON|Unexpected token|Internal Server Error|HTTP 500/i.test(text);
+    const httpStatus = Number(status || error?.status) || 0;
+    if (httpStatus && ![400, 409, 500].includes(httpStatus)) return false;
+    const text = `${detail} ${error?.message || String(error || '')}`;
+    // Only Git's explicit local-file refusal justifies the existing main-only
+    // overwrite fallback. Transport, authentication and JSON errors do not.
+    return /(?:your local changes|the following untracked working tree files)[\s\S]{0,4000}would be overwritten by (?:merge|checkout)/i.test(text);
 }
 
 function reloadTavernPage(delayMs = 800) {
@@ -32271,16 +32995,16 @@ async function overwriteFromGithub(folder) {
     const reinstallFn = resolveHostFn('reinstallExtension');
     if (!reinstallFn) throw updateError('更新失败：本地扩展目录有改动，酒馆无法 git pull。当前环境没有 GitHub 覆盖安装。');
     globalThis.toastr?.info?.('git pull 被本地改动挡住了，改为用 GitHub 版本覆盖…', '心迹回廊');
-    const response = await reinstallFn(folder);
+    let response;
+    try { response = await reinstallFn(folder); }
+    catch { throw updateError('GitHub 覆盖失败，请检查宿主与网络后重试。'); }
     if (response?.ok === true) {
         globalThis.toastr?.success?.('已强制覆盖为 GitHub 版本，正在刷新页面…', '心迹回廊');
         reloadTavernPage();
         return { ok: true, overwritten: true };
     }
     const status = typeof response?.status === 'number' ? response.status : 0;
-    let detail = '';
-    try { if (typeof response?.text === 'function') detail = (await response.text()).trim(); } catch {}
-    throw updateError(detail || (status ? `GitHub 覆盖失败 (HTTP ${status})` : 'GitHub 覆盖失败'));
+    throw updateError(status ? `GitHub 覆盖失败 (HTTP ${status})` : 'GitHub 覆盖失败，请检查宿主与网络。');
 }
 
 async function applyHearttraceUpdateAndReload(options = {}) {
@@ -32305,10 +33029,12 @@ async function applyHearttraceUpdateAndReload(options = {}) {
             let detail = '';
             try { if (typeof response?.text === 'function') detail = (await response.text()).trim(); } catch {}
             if (looksLikeGitPullBlocked(null, status, detail)) return afterPullBlocked(branch, folder);
-            throw updateError(detail || `宿主更新接口返回 HTTP ${status || '?'}`);
+            const failure = updateError(`宿主更新接口返回 HTTP ${status || '?'}，请检查宿主与网络后重试。`);
+            failure.status = status;
+            throw failure;
         } catch (error) {
             if (looksLikeGitPullBlocked(error, error?.status, error?.detail)) return afterPullBlocked(branch, folder);
-            throw error?.userMessage ? error : updateError(error?.message || '更新未完成，请检查宿主与网络。');
+            throw localUpdateErrors.has(error) ? error : updateError('更新未完成，请检查宿主与网络后重试。');
         }
     }
     try {
@@ -38894,13 +39620,13 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         }
         if (commitCompletedOnly) {
             globalThis.toastr?.success?.('已将成功分段入档，未完成部分仍保留；继续时不会重做已入档分段。', '心迹回廊');
-            return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred' };
+            return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred', archiveRevision: memoryBank.archiveRevision };
         }
         const added = Math.max(0, memories.length - (incrementalUpdate ? existing.memories.length : 0));
         const rollingNotice = archive_capacity.capacityNotice(admitted);
         globalThis.toastr?.success?.(core_text.toastText(`${progress && archive_batches.hasPendingBatches(memoryBank[archive_batches.IMPORT_PROGRESS_KEY]) ? `【${archive_coverage.OPERATION_KIND_LABEL[operationKind]}】${capacityPending.length ? '本批部分结果入档，余下结果待入档' : '本批已保存，后续批次待点击'}` : `${actionLabel}完成`}：${memoryBank.archiveName} · 当前热位 ${memories.length} 条${memoryBank.coldArchive?.length ? ` · 冷归档 ${memoryBank.coldArchive.length}` : ''}${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${!core_context.isCurrentTaskOrigin(origin) ? '（待回到原窗口写入，尚未正式保存）' : ''}`), '心迹回廊');
         if (rollingNotice) globalThis.toastr?.info?.(rollingNotice, '心迹回廊 · 容量');
-        return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred' };
+        return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred', archiveRevision: memoryBank.archiveRevision };
     } catch (error) {
         const cancelled = isArchiveCancellation(error);
         if (chunkInFlight) core_taskTrace.markChunks(taskTrace, {
@@ -48229,7 +48955,7 @@ __m_core_worldPresentation_js.controlledEvidenceContains = controlledEvidenceCon
 function __init_generation_achievementCapture_js() {
 // MODULE: generation/achievementCapture.js
 
-// 只有自动留忆的最后一步才武装。成就字段从正文 JSON 里拆走，不改各模块原来的校验。
+// 自动留忆携带成就的步骤独占本次捕获。成就字段从正文 JSON 里拆走，不改各模块原来的校验。
 
 const SUFFIX = `
 【本轮成就，和上面这份回忆写在同一次 JSON 里】
@@ -48237,23 +48963,30 @@ const SUFFIX = `
 {"title":"不超过20字","description":"一两句说明","unlockCondition":"做到或经历了什么才解锁","kind":"historical或collection","sourceMemoryAnchor":"从本轮档案锚点原样复制"}
 能被本轮真实档案证明的用 historical。推演、模拟、后日谈用 collection。不要解释。`;
 
-let armed = false;
-let packet = null;
-// r84.175：手帐批注搭便车。只在自动留忆最后一步、而且有「等批注」的手帐页时才加这一段；
-// 字段 journalNotes 和成就一样从正文 JSON 里拆走，不改各模块的校验，也不多发请求。
-let journalPages = [];
-let journalPacket = null;
-let journalNames = { charName: '角色', userName: '用户' };
+// The opaque handle is attached only to the logical task launched by its owner.
+// Parallel modes and sibling steps cannot borrow or finish another capture.
+const captures = new WeakMap();
 
-function armAchievementCapture({ journalPages: pages = [], charName = '', userName = '' } = {}) {
-    armed = true;
-    packet = null;
-    journalPacket = null;
-    journalPages = Array.isArray(pages) ? pages.filter(row => row && typeof row.pageId === 'string' && typeof row.text === 'string') : [];
-    journalNames = { charName: charName || '角色', userName: userName || '用户' };
+function armAchievementCapture({ journalPages: pages = [], charName = '', userName = '', signal = null } = {}) {
+    const handle = Object.freeze({});
+    const state = { packet: null, journalPacket: null,
+        journalPages: Array.isArray(pages) ? pages.filter(row => row && typeof row.pageId === 'string' && typeof row.text === 'string')
+            .map(row => ({ pageId: row.pageId, text: row.text })) : [],
+        journalNames: { charName: charName || '角色', userName: userName || '用户' },
+        signal, cancel: () => finishAchievementCapture(handle) };
+    if (signal?.aborted) return handle;
+    captures.set(handle, state);
+    signal?.addEventListener?.('abort', state.cancel, { once: true });
+    return handle;
 }
 
-function journalSuffix() {
+function achievementCaptureForTask(task) {
+    const handle = task?.autoMemoryCapture;
+    return !task?.signal?.aborted && captures.has(handle) ? handle : null;
+}
+
+function journalSuffix(state) {
+    const { journalPages, journalNames } = state;
     if (!journalPages.length) return '';
     return `
 【顺便给手帐写批注，同样写在这同一个 JSON 对象里】
@@ -48261,25 +48994,30 @@ ${journalNames.userName}把下面这些片段夹进了手帐。请以${journalNa
 UNTRUSTED_JOURNAL_PAGES: ${JSON.stringify(journalPages)}`;
 }
 
-function achievementCaptureArmed() {
-    return armed === true;
+function achievementCaptureArmed(handle) {
+    return captures.has(handle);
 }
 
-function achievementPromptSuffix() {
-    return armed ? SUFFIX + journalSuffix() : '';
+function achievementPromptSuffix(handle) {
+    const state = captures.get(handle);
+    return state ? SUFFIX + journalSuffix(state) : '';
 }
 
-function stripAchievementField(raw) {
-    if (!armed || !raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+function stripAchievementField(raw, handle) {
+    const state = captures.get(handle);
+    if (!state || !raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
     if (!Object.hasOwn(raw, 'achievement') && !Object.hasOwn(raw, 'journalNotes')) return raw;
     const copy = { ...raw };
-    if (Object.hasOwn(raw, 'achievement')) { packet = raw.achievement; delete copy.achievement; }
-    if (Object.hasOwn(raw, 'journalNotes')) { journalPacket = raw.journalNotes; delete copy.journalNotes; }
+    if (Object.hasOwn(raw, 'achievement')) { state.packet = raw.achievement; delete copy.achievement; }
+    if (Object.hasOwn(raw, 'journalNotes')) { state.journalPacket = raw.journalNotes; delete copy.journalNotes; }
     return copy;
 }
 
 // 取走本轮顺便写的手帐批注（只保留请求里那几页、非空的一句）。
-function takeJournalNotes() {
+function takeJournalNotes(handle) {
+    const state = captures.get(handle);
+    if (!state) return {};
+    const { journalPages, journalPacket } = state;
     const ids = new Set(journalPages.map(row => row.pageId));
     const out = {};
     for (const row of Array.isArray(journalPacket) ? journalPacket : []) {
@@ -48287,19 +49025,21 @@ function takeJournalNotes() {
         const text = typeof row?.text === 'string' ? row.text.trim() : '';
         if (ids.has(id) && text && !out[id]) out[id] = text;
     }
-    journalPacket = null;
+    state.journalPacket = null;
     return out;
 }
 
-function finishAchievementCapture() {
-    armed = false;
-    journalPages = [];
-    const value = packet;
-    packet = null;
+function finishAchievementCapture(handle) {
+    const state = captures.get(handle);
+    if (!state) return null;
+    captures.delete(handle);
+    state.signal?.removeEventListener?.('abort', state.cancel);
+    const value = state.packet;
     return value && typeof value === 'object' ? value : null;
 }
 
 __m_generation_achievementCapture_js.armAchievementCapture = armAchievementCapture;
+__m_generation_achievementCapture_js.achievementCaptureForTask = achievementCaptureForTask;
 __m_generation_achievementCapture_js.achievementCaptureArmed = achievementCaptureArmed;
 __m_generation_achievementCapture_js.achievementPromptSuffix = achievementPromptSuffix;
 __m_generation_achievementCapture_js.stripAchievementField = stripAchievementField;
@@ -48705,6 +49445,17 @@ function participantAppearanceSource(person, context) {
     return sources.join('\n');
 }
 
+function roleAppearanceSources(context) {
+    let card = {};
+    try { card = context?.getCharacterCardFields?.() || {}; } catch {}
+    return {
+        char: [sourceText(card.description, context), sourceText(card.personality, context)]
+            .filter(Boolean).join('\n').slice(0, 5000),
+        user: sourceText(card.persona, context)
+            || sourceText(context?.powerUserSettings?.persona_description, context),
+    };
+}
+
 function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBaiImage, castSnapshot = null, selectedRoles = null } = {}) {
     const snapshot = participants.normalizeParticipantSnapshot(castSnapshot);
     if (snapshot) {
@@ -48727,21 +49478,20 @@ function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBaiImage, 
             missingParticipantIds: Object.freeze(characters.filter(row => !row.description && !row.knownTag && !row.knownNl).map(row => row.participantId)) });
     }
     const confirmed = cast_looks.readCastLooks(context);
-    let card = {};
-    if (!confirmed?.manual) { try { card = context?.getCharacterCardFields?.() || {}; } catch {} }
-    const characterDescription = [sourceText(card.description, context), sourceText(card.personality, context)]
-        .filter(Boolean).join('\n').slice(0, 5000);
-    const userDescription = sourceText(card.persona, context)
-        || sourceText(context?.powerUserSettings?.persona_description, context);
     const roles = ROLES.filter(role => !Array.isArray(selectedRoles) || selectedRoles.includes(role));
     const presets = image_presets.resolveImageAppearancePresets(context,
         appearancePresetRoster(context), { api });
+    // Saving one person's look must not hide the other person's source. Known
+    // nonempty looks still win without rereading the host card unnecessarily.
+    const sources = roles.some(role => !presets.has(role)
+        && (!confirmed?.manual || !plain(confirmed[role], CG_APPEARANCE_TAG_LIMIT)))
+        ? roleAppearanceSources(context) : null;
     const characters = roles.map(role => {
         const name = plain(role === 'char' ? context?.name2 : context?.name1, 120);
         const preset = presets.get(role);
-        const manualTag = confirmed?.manual ? confirmed[role] : '';
+        const manualTag = confirmed?.manual ? plain(confirmed[role], CG_APPEARANCE_TAG_LIMIT) : '';
 
-        return Object.freeze({ role, name, description: preset || confirmed?.manual ? '' : role === 'char' ? characterDescription : userDescription,
+        return Object.freeze({ role, name, description: preset || manualTag ? '' : sources?.[role] || '',
             knownTag: appearanceText(preset?.tag || preset?.nl || (confirmed?.manual ? manualTag : ''), { presetAppearance: !!preset }),
             knownNl: '',
             ...(preset ? { presetAppearance: true, fallbackTag: plain(confirmed?.manual ? manualTag : cast_looks.lookFromRoleDescription(confirmed?.[role], role, context), CG_APPEARANCE_TAG_LIMIT),
@@ -49044,6 +49794,7 @@ function appearanceEvidenceForFormat(evidence, promptFormat) {
 }
 function appearanceEvidenceWithDraft(evidence, draft, context = null) {
     if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return evidence;
+    let roleSources;
     return { ...evidence, characters: (evidence?.characters || []).map(row => {
         const key = evidence.castSnapshot ? row.participantId : row.role;
         const current = Object.hasOwn(draft, key) ? draft[key] : null;
@@ -49083,7 +49834,12 @@ function appearanceEvidenceWithDraft(evidence, draft, context = null) {
         if (!ROLES.includes(row.role) || !Object.hasOwn(draft, row.role)) return row;
         const value = draft[row.role];
         if (typeof value !== 'string' && (!value || typeof value !== 'object' || Array.isArray(value))) return row;
-        return { ...withoutNegative, knownTag: appearanceText(typeof value === 'string' ? value : value.tag, value), knownNl: '', ...presetProvenance(value),
+        const knownTag = appearanceText(typeof value === 'string' ? value : value.tag, value);
+        // Explicit re-extraction after clearing a saved look needs that role's
+        // source again. Keep this read local to the action and shared by both roles.
+        const description = !knownTag && !row.description && context
+            ? (roleSources ||= roleAppearanceSources(context))[row.role] : row.description;
+        return { ...withoutNegative, description, knownTag, knownNl: '', ...presetProvenance(value),
             ...(typeof value === 'string' || value.appearanceOverride === true ? { appearanceOverride: true } : {}) };
     }) };
 }
@@ -52259,7 +53015,8 @@ async function requestValidatedSegment(prompt, status, options, validator) {
         throw core_requestCoordinator.createGenerationAbortError();
     }
     prompt = cg_policy.cgPromptForSegment(prompt, options);
-    if (generation_achievement.achievementCaptureArmed()) prompt += generation_achievement.achievementPromptSuffix();
+    const achievementCapture = generation_achievement.achievementCaptureForTask(logicalTask);
+    if (achievementCapture) prompt += generation_achievement.achievementPromptSuffix(achievementCapture);
     validator = cg_policy.cgSegmentValidator(validator, options);
     const parentTrace = generationTrace(options);
     const taskTrace = core_taskTrace.startTaskTrace('', options?.mode, parentTrace);
@@ -52287,7 +53044,7 @@ async function requestValidatedSegment(prompt, status, options, validator) {
             : '';
         try {
             const received = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options);
-            const raw = generation_achievement.stripAchievementField(received);
+            const raw = generation_achievement.stripAchievementField(received, achievementCapture);
             core_taskTrace.beginStage(options.taskTrace, 'validate');
             let value;
             try { value = core_requestCoordinator.validateGeneratedSegment(raw, validator); }
@@ -53304,7 +54061,7 @@ async function generateMode(mode, options = {}) {
         options = { ...options, contentSelectionRequest: content_selection.readContentSelectionRequest(context, bank, mode, saved) };
     }
     if (!Object.hasOwn(options, 'participantSnapshot') && !options.existing && !options.draftId && !options.participantRegeneration && !options.archiveTarget
-        && !core_cache.loadGenerationRecovery(mode, context)) {
+        && (options.newTask === true || !core_cache.loadGenerationRecovery(mode, context))) {
         options = { ...options, participantSnapshot: routePeople.captureRoutePeople(options.workspaceRoute || mode, context, archive_repository.getImportedMemory(context)) };
     }
     const origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || '');
@@ -53319,6 +54076,7 @@ async function generateMode(mode, options = {}) {
         globalThis.toastr?.info?.(`「${core_constants.MODE_LABEL[mode]}」已经在生成/补齐中。`, '心迹回廊');
         return options.participantRegeneration ? { status: 'blocked' } : undefined;
     }
+    if (options.autoMemoryCapture) logicalTask.autoMemoryCapture = options.autoMemoryCapture;
     let result;
     try {
         result = await generateModeOperation(mode, { ...options, logicalTask });
@@ -54691,6 +55449,35 @@ function parseRepairedObject(text) {
     } catch { return null; }
 }
 
+// Pick the answer before attempting to repair it. A complete example earlier in
+// the reply must not replace a later answer just because that answer is cut off
+// or has a repairable comma. Fences are scanned independently so prose braces
+// cannot swallow their JSON. A lone prose brace is not a new object candidate.
+function finalJsonResponseCandidate(text) {
+    const choices = [];
+    const collect = (body, offset) => {
+        const { candidates, unclosedObject } = extractBalancedJsonObjects(body);
+        let cursor = 0;
+        for (const candidate of [...candidates, ...(unclosedObject ? [unclosedObject] : [])]) {
+            const index = body.indexOf(candidate, cursor);
+            if (index < 0) continue;
+            cursor = index + candidate.length;
+            const recognizable = repairJsonCandidate(candidate) || candidate;
+            // Invalid quote/key styles still identify a later attempted object.
+            // Select it for an error instead of silently accepting an earlier
+            // example; an unstructured prose brace remains outside this rule.
+            if (!/^\{\s*(?:["“”]|\}|(?:'(?:\\.|[^'\\\r\n])*'|[\p{L}\p{N}_$][\p{L}\p{N}_$-]*)\s*:)/u.test(recognizable)) continue;
+            choices.push({ text: candidate, position: offset + index });
+        }
+    };
+    collect(text, 0);
+    for (const fence of text.matchAll(/(?:^|\n)[ \t]*```(?:json)?[ \t]*\r?\n([\s\S]*?)(?:\r?\n[ \t]*```[ \t]*(?=\r?\n|$)|$)/gi)) {
+        collect(fence[1], fence.index + fence[0].indexOf(fence[1]));
+    }
+    choices.sort((left, right) => right.position - left.position);
+    return choices[0]?.text || '';
+}
+
 // A reply whose final } balances its first { when string state is ignored has
 // most likely ended; an unescaped quote inside a string only makes the
 // string-aware scan look unclosed. Real cut-offs still have unclosed brackets.
@@ -54781,6 +55568,11 @@ function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxT
         if (salvaged) return salvaged;
         // Do not fall back to an earlier example when the answer has started.
         text = inboxCandidate;
+    }
+    // Mail keeps its existing optional-art salvage path. Other modes must work
+    // only with the last actual answer, including when it is still incomplete.
+    if (!inboxCandidate && mergedInboxIllustrations !== true) {
+        text = finalJsonResponseCandidate(text) || text;
     }
     const fences = [...text.matchAll(/(?:^|\n)[ \t]*```json[ \t]*\n([\s\S]*?)\n[ \t]*```[ \t]*(?=\n|$)/gi)];
     for (let i = fences.length - 1; i >= 0; i -= 1) {
@@ -92501,11 +93293,26 @@ const text = __m_core_text_js;
 
 
 
+const STRATEGY_LABELS = [['default', '沿用档案人物'], ['archive', '按档案剧情出场'], ['specified', '指定人物'], ['random', '随机一人'], ['ensemble', '群像']];
+function strategyHint(strategy, roster, memory) {
+    const named = ids => ids.map(id => roster.people.find(person => person.id === id)?.name).filter(Boolean).join('、');
+    if (strategy === 'archive') {
+        const ids = choices.archiveCastIds(roster, memory);
+        return ids.length
+            ? `只写档案记忆里已经出场的人物，档案更新后自动跟着变。现在找到：${named(ids)}。`
+            : '只写档案记忆里已经出场的人物。现在档案里还没找到名单里的人物，生成时会提示你换一种方式。';
+    }
+    if (strategy === 'specified') return '只写下面勾选的人物。';
+    if (strategy === 'random') return '每次生成从名单里随机抽一个人。';
+    if (strategy === 'ensemble') return '名单里的人物全部一起出场，包括剧情里还没登场的。';
+    const picked = named(roster.selectedIds);
+    return `用建档时勾选的人物${picked ? `（${picked}）` : ''}，剧情里还没登场的人也会算进去。只想要已经出场的人，选「按档案剧情出场」。`;
+}
 function routePeopleHtml(route, context = contextApi.getContext(), memory = repository.getImportedMemory(context)) {
     const roster = people.normalizeParticipantRoster(memory?.[people.PARTICIPANTS_KEY]);
     if (!roster?.people?.length) return '';
     const choice = choices.readRoutePeople(route, context, memory);
-    return `<details class="rmt-route-people" data-rmt-people-route="${text.esc(route)}"><summary>本页人物</summary><label>选择方式<select data-rmt-people-strategy aria-label="${text.esc(route)}人物选择方式">${[['default','沿用档案人物'],['specified','指定人物'],['random','随机一人'],['ensemble','群像']].map(([value,label]) => `<option value="${value}" ${choice.strategy === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><fieldset ${choice.strategy === 'specified' ? '' : 'hidden'}><legend>参加这一页的人物</legend>${roster.people.filter(person => person.identity !== 'user').map(person => `<label><input type="checkbox" data-rmt-people-id="${text.esc(person.id)}" ${choice.selectedIds.includes(person.id) ? 'checked' : ''}>${text.esc(person.name)}</label>`).join('')}</fieldset></details>`;
+    return `<details class="rmt-route-people" data-rmt-people-route="${text.esc(route)}"><summary>本页人物</summary><label>选择方式<select data-rmt-people-strategy aria-label="${text.esc(route)}人物选择方式">${STRATEGY_LABELS.map(([value,label]) => `<option value="${value}" ${choice.strategy === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><small class="rmt-route-people-hint" data-rmt-people-hint>${text.esc(strategyHint(choice.strategy, roster, memory))}</small><fieldset ${choice.strategy === 'specified' ? '' : 'hidden'}><legend>参加这一页的人物</legend>${roster.people.filter(person => person.identity !== 'user').map(person => `<label><input type="checkbox" data-rmt-people-id="${text.esc(person.id)}" ${choice.selectedIds.includes(person.id) ? 'checked' : ''}>${text.esc(person.name)}</label>`).join('')}</fieldset></details>`;
 }
 function handleRoutePeopleChange(event) {
     if (!event.target?.matches?.('[data-rmt-people-strategy],[data-rmt-people-id]')) return false;
@@ -92513,9 +93320,13 @@ function handleRoutePeopleChange(event) {
     if (!root) return false;
     const context = contextApi.currentCharacterGuard(), memory = repository.getImportedMemory(context);
     const strategy = root.querySelector('[data-rmt-people-strategy]').value;
-    choices.writeRoutePeople(root.dataset.rmtPeopleRoute, { strategy,
+    const saved = choices.writeRoutePeople(root.dataset.rmtPeopleRoute, { strategy,
         selectedIds: [...root.querySelectorAll('[data-rmt-people-id]:checked')].map(node => node.dataset.rmtPeopleId) }, context, memory);
+    if (!saved) globalThis.toastr?.warning?.('人物选择暂未保存，刷新后需重新选择。', '心迹回廊');
     root.querySelector('fieldset').hidden = strategy !== 'specified';
+    const hint = root.querySelector('[data-rmt-people-hint]');
+    const roster = people.normalizeParticipantRoster(memory?.[people.PARTICIPANTS_KEY]);
+    if (hint && roster) hint.textContent = strategyHint(strategy, roster, memory);
     return true;
 }
 
@@ -99142,6 +99953,7 @@ ${r} .rmt-route-people label{display:flex;align-items:center;gap:8px;min-height:
 ${r} .rmt-route-people select{font:inherit;min-height:44px;width:100%;padding:8px;border:1px solid var(--rmt-theme-border);border-radius:10px;background:var(--rmt-theme-surface-solid);color:inherit}
 ${r} .rmt-route-people fieldset{border:0;margin:6px 0;padding:0;display:flex;flex-wrap:wrap;gap:8px 16px}
 ${r} .rmt-route-people fieldset[hidden]{display:none}
+${r} .rmt-route-people-hint{display:block;margin:2px 0 6px;color:var(--rmt-theme-muted);font-size:calc(12px*var(--rmt-font-scale,1));line-height:1.6}
 ${r} .rmt-voice-page{max-width:760px;margin:auto;padding:clamp(12px,3vw,28px);font-size:calc(16px*var(--rmt-font-scale,1));line-height:1.7}
 ${r} .rmt-voice-page h2{font-size:calc(22px*var(--rmt-font-scale,1));line-height:1.4}
 ${r} .rmt-body .rmt-inbox button.rmt-mail-drawing[data-rmt-paper]{background:var(--rmt-letter-paper)!important;color:var(--rmt-letter-ink)!important;border-color:var(--rmt-letter-line)!important}
@@ -99520,6 +100332,7 @@ const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_evidence = __m_core_evidence_js;
+const narrative_authority = __m_core_narrativeAuthority_js;
 const core_text = __m_core_text_js;
 const archive_repository = __m_archive_repository_js;
 const generation_client = __m_generation_client_js;
@@ -99527,7 +100340,8 @@ const generation_prompts = __m_generation_prompts_js;
 const modes_relations = __m_modes_relations_js;
 const extras_store = __m_extras_store_js;
 // 朋友情报：从人际庭园的人物出发，请 TA 用自己的口吻讲“他提起你的样子”。
-// 事实只认档案；编号对不上档案时不报错，改标为“生活设定”。温度等生成参数完全沿用用户设置。
+// 共同往事须有当前档案的编号与可见原文锚点；普通观察与建议无需历史证据。
+
 
 
 
@@ -99598,8 +100412,8 @@ ${generation_prompts.promptArchiveSlice(memory, 56)}
 
 【写作要求】
 1. sections 依次写三段：mention（${charName} 提起 ${userName} 的样子）、seen（${person.name} 亲眼看到的 ${charName}）、advice（${person.name} 给 ${userName} 的悄悄话）。
-2. mention 与 seen 里说到的过去之事，必须来自上方档案，并在 sourceMemoryIds 填对应编号；${person.name} 没亲历、档案也没写的事，就让 TA 说“这个我就不清楚了”，不要编造。
-3. advice 是建议，不是事实，sourceMemoryIds 留空数组。
+2. 说到已发生的共同往事时，必须来自上方档案：sourceMemoryIds 填对应编号，sourceMemoryAnchor 原样填写该记忆的 title 或一条完整 anchor，并把这段原文自然保留在 text 中。不能拿真实编号或无关锚点为新编往事作证；${person.name} 没亲历、档案也没写的事，就让 TA 说“这个我就不清楚了”。当下观察与未来设想不是共同往事，无需引用。
+3. advice 写建议，不补造过去的事实；没有引用往事时 sourceMemoryIds 留空数组、sourceMemoryAnchor 留空字符串。
 4. 每段 2～5 句，口语化，符合 ${person.name} 的身份、时代和世界观；不要替 ${userName} 做决定或说话。
 5. scene 写这次打听发生的时间地点，一句话，符合世界观。
 
@@ -99607,27 +100421,103 @@ ${generation_prompts.promptArchiveSlice(memory, 56)}
 只输出一个 JSON 对象。
 第一个字符必须是 {，最后一个字符必须是 }。
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
-{"scene":"时间地点","sections":[{"kind":"mention","text":"……","sourceMemoryIds":["M001"]},{"kind":"seen","text":"……","sourceMemoryIds":["M002"]},{"kind":"advice","text":"……","sourceMemoryIds":[]}]}`;
+{"scene":"时间地点","sections":[{"kind":"mention","text":"……","sourceMemoryIds":[],"sourceMemoryAnchor":""},{"kind":"seen","text":"……","sourceMemoryIds":[],"sourceMemoryAnchor":""},{"kind":"advice","text":"……","sourceMemoryIds":[],"sourceMemoryAnchor":""}]}`;
+}
+
+function intelClaimsSharedHistory(text, memory) {
+    // Keep the shared detector's tense/participant rules for this feature too.
+    // Proposal/engagement wording denotes the same relationship-episode boundary
+    // as marriage, but is not in its general-purpose action vocabulary.
+    return narrative_authority.narrativeClaimsSharedHistory(text.replace(/求婚|订婚/gu, '结婚'), {
+        userName: memory?.userName || '',
+    });
+}
+
+function intelHasUnboundHistory(text, reference, memory) {
+    const marker = '\u0000'; // normalizeText has already removed input NULs.
+    const terms = core_evidence.memoryEvidenceTerms(memory, reference.sourceMemoryIds)
+        .sort((left, right) => right.length - left.length);
+    let remaining = text;
+    for (const term of terms) {
+        const pattern = [...term.replace(/\s+/gu, '')]
+            .map(char => char.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('\\s*');
+        remaining = remaining.replace(new RegExp(pattern, 'giu'), marker);
+    }
+    // Check only claims left after the cited memories' literal evidence. This is
+    // a bounded language guard, not a semantic proof of the whole paragraph.
+    // A date immediately attached to the removed evidence is its recall frame,
+    // not another event ("remember you [anchor] that day"). Keep the participant
+    // words so an omitted subject after a comma still refers to the same people.
+    remaining = remaining.replace(/\u0000(?:的)?(?:那(?:天|晚|夜|次|年)|当时|往事|旧事)/gu, marker)
+        .replace(/(?:那(?:天|晚|夜|次|年)|当时)(你们|我们|咱们|两个人|双方)?\s*\u0000/gu, (_, subject = '') => subject + marker)
+        .split(marker).join(' ');
+    const userName = core_text.normalizeText(memory?.userName, 120);
+    const characterName = core_text.normalizeText(memory?.characterName, 120);
+    remaining = remaining.replace(/([，,])([^，,。！？!?；;\n]+)/gu, (whole, separator, clause) => {
+        const mentionsUser = (userName && clause.includes(userName))
+            || /你|我们|咱们|两个人|彼此|共同|一起|\b(?:you|your|yours|we|us|our|ours|together)\b/iu.test(clause);
+        const subject = clause.trim().replace(/^(?:昨天|昨日|昨晚|前天|去年|前年|上次|以前|从前|当年|那天|那晚|小时候|今天|今早|今晚)\s*/u, '');
+        const independent = /^(?:他|她|它|我|本人)/u.test(subject)
+            || (characterName && subject.startsWith(characterName));
+        // An explicit independent subject starts a new scope. Do not lend the
+        // previous "you/we" to "he went alone yesterday", but keep inheritance
+        // for "yesterday [we] also exchanged rings".
+        return independent && !mentionsUser ? `。${clause}` : whole;
+    });
+    return intelClaimsSharedHistory(remaining, memory);
+}
+
+function intelSectionEvidence(item, text, memory) {
+    const claimedIds = core_text.cleanArray(item?.sourceMemoryIds, 16, 40);
+    const claimedAnchor = core_text.normalizeText(item?.sourceMemoryAnchor, 120);
+    const reference = core_evidence.normalizeExactMemoryReference(claimedIds, claimedAnchor, memory, 1);
+    const fold = value => core_text.normalizeText(value, 1600).replace(/\s+/gu, '').toLowerCase();
+    const verified = !!reference.sourceMemoryIds.length && !!reference.sourceMemoryAnchor
+        && fold(text).includes(fold(reference.sourceMemoryAnchor))
+        && !intelHasUnboundHistory(text, reference, memory);
+    const needsEvidence = claimedIds.length > 0 || !!claimedAnchor || intelClaimsSharedHistory(text, memory);
+    return { verified, needsEvidence, reference };
 }
 
 function normalizeIntel(data, memory, person) {
     const raw = Array.isArray(data?.sections) ? data.sections : [];
-    const sections = SECTION_KINDS.map(kind => {
-        const item = raw.find(row => core_text.normalizeText(row?.kind, 20) === kind) || null;
+    const normalizeSection = (item, kind) => {
         const text = core_text.normalizeText(item?.text, 1600);
         if (!text) return null;
-        const ids = kind === 'advice' ? [] : core_evidence.normalizeSourceMemoryIds(item?.sourceMemoryIds, memory, 0);
-        return { kind, text, sourceMemoryIds: ids };
+        const proof = intelSectionEvidence(item, text, memory);
+        if (proof.needsEvidence && !proof.verified) {
+            throw core_text.safeUserError('这段情报的往事依据未能核实，原始回复会保留供检查，不会作为已验证情报保存。', 'RMT_INTEL_EVIDENCE');
+        }
+        return { kind, text, ...(proof.verified ? proof.reference : { sourceMemoryIds: [], sourceMemoryAnchor: '' }) };
+    };
+    const sections = SECTION_KINDS.map(kind => {
+        const item = raw.find(row => core_text.normalizeText(row?.kind, 20) === kind) || null;
+        return normalizeSection(item, kind);
     }).filter(Boolean);
     // 模型没按 kind 写时，按顺序兜底，不因为格式小偏差丢掉整次结果。
     if (!sections.length) {
         raw.slice(0, 3).forEach((item, index) => {
-            const text = core_text.normalizeText(item?.text, 1600);
-            if (text) sections.push({ kind: SECTION_KINDS[index], text, sourceMemoryIds: index === 2 ? [] : core_evidence.normalizeSourceMemoryIds(item?.sourceMemoryIds, memory, 0) });
+            const section = normalizeSection(item, SECTION_KINDS[index]);
+            if (section) sections.push(section);
         });
     }
     if (!sections.length) throw core_text.safeUserError(`这次没有收到${person.name}的回答，可以再问一次。`, 'RMT_INTEL_EMPTY');
-    return { scene: core_text.normalizeText(data?.scene, 120), sections };
+    return { scene: core_text.normalizeText(data?.scene, 120), sections, evidenceVersion: 1 };
+}
+
+// Existing records remain readable. Rechecking is display-only: it neither edits
+// stored prose nor grants old/model-provided flags authority over current evidence.
+function intelRecordForDisplay(record, memory) {
+    if (!record || typeof record !== 'object') return null;
+    const sections = (Array.isArray(record.sections) ? record.sections : []).map((item, index) => {
+        const kind = SECTION_KINDS.includes(item?.kind) ? item.kind : SECTION_KINDS[Math.min(index, 2)];
+        const text = core_text.normalizeText(item?.text, 1600);
+        const proof = intelSectionEvidence(item, text, memory);
+        const unverified = !proof.verified && (proof.needsEvidence || (record.evidenceVersion !== 1 && kind !== 'advice'));
+        return { kind, text, ...(proof.verified ? proof.reference : { sourceMemoryIds: [], sourceMemoryAnchor: '' }),
+            evidenceState: proof.verified ? 'verified' : unverified ? 'unverified' : 'none' };
+    });
+    return { ...record, sections };
 }
 
 function isIntelRunning(scope, key) {
@@ -99654,7 +100544,9 @@ async function askIntel(personName, { onSettled } = {}) {
         catch (error) {
             const held = extras_store.stageExtraResult({ scope, kind: 'intel', origin, base, raw: data });
             return { pending: true, scope, record: null, durable: held.durable,
-                reason: '已收到结果，但格式需要检查。请导出原始结果，不会自动重新生成。' };
+                reason: error?.code === 'RMT_INTEL_EVIDENCE'
+                    ? '这次情报的往事依据未能核实，原始回复已保留供导出检查，不会自动重新生成。'
+                    : '已收到结果，但格式需要检查。请导出原始结果，不会自动重新生成。' };
         }
         const createdAt = Date.now();
         const record = { id: extras_store.extraRecordId('INTEL'), createdAt, person: person.name, relation: person.relation, ...result };
@@ -99671,6 +100563,7 @@ __m_extras_intel_js.askIntel = askIntel;
 __m_extras_intel_js.intelPeople = intelPeople;
 __m_extras_intel_js.intelPrompt = intelPrompt;
 __m_extras_intel_js.normalizeIntel = normalizeIntel;
+__m_extras_intel_js.intelRecordForDisplay = intelRecordForDisplay;
 __m_extras_intel_js.isIntelRunning = isIntelRunning;
 }
 
@@ -100374,12 +101267,18 @@ function sourceChips(ids, fallback) {
     return ids?.length ? `<div class="rmt-x-chips">${ids.map((id, i) => `<span class="rmt-x-chip">${i ? '' : '依据 '}${esc(id)}</span>`).join('')}</div>` : `<div class="rmt-x-chips"><span class="rmt-x-chip muted">${esc(fallback)}</span></div>`;
 }
 
+function intelSourceChips(section) {
+    if (section.evidenceState === 'unverified') return sourceChips([], '旧情报 · 依据未核实');
+    if (section.evidenceState === 'verified') return sourceChips(section.sourceMemoryIds, '依据未核实');
+    return sourceChips([], section.kind === 'advice' ? '建议 · 不写入档案' : '生活设定');
+}
+
 function renderIntel() {
     chrome('朋友情报', '人际庭园');
     const context = currentContext();
     if (!context || readOnlyTarget()) return emptyPage('朋友情报', '朋友情报只在当前聊天里使用。请回到当前聊天，从人际庭园打开。');
-    let people = [];
-    try { archive_repository.requireArchive(context); people = extras_intel.intelPeople(context); }
+    let people = [], memory = null;
+    try { memory = archive_repository.requireArchive(context); people = extras_intel.intelPeople(context); }
     catch { return emptyPage('朋友情报', '先为当前聊天建立档案，再生成人际庭园。', '<button type="button" class="rmt-btn" data-rmt-workspace-tab="archive">前往当前档案</button>'); }
     if (!people.length) return emptyPage('朋友情报', '人际庭园里还没有可以打听的人。先生成或刷新人际庭园。', '<button type="button" class="rmt-btn" data-rmt-extra="intel-garden">打开人际庭园</button>');
     if (!people.some(p => p.name === view.person)) view.person = people[0].name;
@@ -100387,11 +101286,12 @@ function renderIntel() {
     const extras = extras_store.readExtras(context);
     const current = people.find(p => p.name === view.person);
     const running = extras_intel.isIntelRunning(scope, current.key);
-    const record = extras.intel.find(item => item.id === view.recordId) || extras.intel.find(item => item.person === current.name) || null;
+    const record = extras_intel.intelRecordForDisplay(
+        extras.intel.find(item => item.id === view.recordId) || extras.intel.find(item => item.person === current.name) || null, memory);
     const labels = { mention: '他提起你的样子', seen: `${record?.person || current.name}看到的`, advice: '悄悄话' };
     const result = record ? `<section class="rmt-x-paper">
         <div class="rmt-x-paper-head">${avatar(record.person, 40)}<div><b>${esc(record.person)}的情报</b><small>${esc(record.scene || new Date(record.createdAt).toLocaleDateString('zh-CN'))}</small></div></div>
-        ${record.sections.map((section, index) => `${index ? '<hr>' : ''}<div class="rmt-x-sec"><small>${esc(labels[section.kind] || '')}</small><p>${esc(section.text)}</p>${section.kind === 'advice' ? '<div class="rmt-x-chips"><span class="rmt-x-chip muted">建议 · 不写入档案</span></div>' : sourceChips(section.sourceMemoryIds, '生活设定')}</div>`).join('')}
+        ${record.sections.map((section, index) => `${index ? '<hr>' : ''}<div class="rmt-x-sec"><small>${esc(labels[section.kind] || '')}</small><p>${esc(section.text)}</p>${intelSourceChips(section)}</div>`).join('')}
       </section>` : `<section class="rmt-x-card"><p class="rmt-x-note">还没向${esc(current.name)}打听过。</p></section>`;
     const history = extras.intel.slice(0, 12).map(item => `<button type="button" class="rmt-x-list-row" data-rmt-extra="intel-record" data-rmt-extra-id="${esc(item.id)}">${avatar(item.person, 36)}<span><b>${esc((item.sections[0]?.text || '').slice(0, 22))}${(item.sections[0]?.text || '').length > 22 ? '…' : ''}</b><small>${esc(item.person)} · ${esc(new Date(item.createdAt).toLocaleDateString('zh-CN'))}</small></span><i aria-hidden="true">›</i></button>`).join('');
     const el = body(); if (!el) return;
@@ -100918,6 +101818,9 @@ function targetContext(target) {
         return songSignature(song) === songSignature(target.song) ? live : null;
     } catch { return null; }
 }
+
+// Audio import validates the same immutable song target without patching a record.
+function isCurrentMvTarget(target) { return !!targetContext(target); }
 
 function resultBasis(record, kind, shotId) {
     if (kind === 'frameEdit') return JSON.stringify({ storyRevision: record?.storyRevision,
@@ -102413,6 +103316,7 @@ __m_extras_mv_js.readMv = readMv;
 __m_extras_mv_js.pendingMv = pendingMv;
 __m_extras_mv_js.clearPendingMv = clearPendingMv;
 __m_extras_mv_js.captureMvTarget = captureMvTarget;
+__m_extras_mv_js.isCurrentMvTarget = isCurrentMvTarget;
 __m_extras_mv_js.exportMvRecovery = exportMvRecovery;
 __m_extras_mv_js.writeMv = writeMv;
 __m_extras_mv_js.loadSong = loadSong;
@@ -102506,13 +103410,35 @@ function openDb() {
     return dbPromise;
 }
 
-function run(mode, action) {
+function run(mode, action, { signal, isCurrent, onCommitted } = {}) {
     return openDb().then(db => new Promise((resolve, reject) => {
+        const cancelled = () => signal?.aborted || (isCurrent && !isCurrent());
+        if (cancelled()) { reject(new DOMException('已取消', 'AbortError')); return; }
         const tx = db.transaction(STORE, mode);
-        const request = action(tx.objectStore(STORE));
-        tx.oncomplete = () => resolve(request?.result);
-        tx.onerror = () => reject(tx.error || request?.error || new Error('indexedDB failed'));
-        tx.onabort = () => reject(tx.error || new Error('indexedDB aborted'));
+        let request;
+        const cleanup = () => signal?.removeEventListener?.('abort', abort);
+        const abort = () => {
+            // If the transaction already committed, its completion is authoritative.
+            // Never compensate with a later write that could overwrite a newer action.
+            try { tx.abort(); } catch { /* The complete/abort event resolves the outcome. */ }
+        };
+        tx.oncomplete = () => {
+            cleanup();
+            try { onCommitted?.(); } catch { /* UI notification cannot undo a committed write. */ }
+            resolve(request?.result);
+        };
+        tx.onerror = () => { cleanup(); reject(tx.error || request?.error || new Error('indexedDB failed')); };
+        tx.onabort = () => { cleanup(); reject(tx.error || new DOMException('已取消', 'AbortError')); };
+        signal?.addEventListener?.('abort', abort, { once: true });
+        try {
+            if (cancelled()) { abort(); return; }
+            request = action(tx.objectStore(STORE));
+            if (mode === 'readwrite' && isCurrent) request.onsuccess = () => {
+                // Request success precedes the transaction commit and still
+                // permits aborting if the owning song changed during the write.
+                try { if (cancelled()) abort(); } catch { abort(); }
+            };
+        } catch (error) { abort(); cleanup(); reject(error); }
     }));
 }
 
@@ -102520,8 +103446,8 @@ function mediaKey(kind, scope, songId, shotId = '') {
     return [kind, scope, songId, shotId].join('\u001f');
 }
 
-async function putMedia(key, blob, name = '', details = {}) {
-    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now(), ...(details.sourceUrl ? { sourceUrl: details.sourceUrl } : {}), ...(!blob && details.mediaUrl ? { mediaUrl: details.mediaUrl } : {}), ...(typeof details.artist === 'string' && details.artist ? { artist: details.artist.slice(0, 80) } : {}), ...(typeof details.coverUrl === 'string' && /^https:\/\//.test(details.coverUrl) ? { coverUrl: details.coverUrl } : {}) })); return true; }
+async function putMedia(key, blob, name = '', details = {}, options = {}) {
+    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now(), ...(details.sourceUrl ? { sourceUrl: details.sourceUrl } : {}), ...(!blob && details.mediaUrl ? { mediaUrl: details.mediaUrl } : {}), ...(typeof details.artist === 'string' && details.artist ? { artist: details.artist.slice(0, 80) } : {}), ...(typeof details.coverUrl === 'string' && /^https:\/\//.test(details.coverUrl) ? { coverUrl: details.coverUrl } : {}) }), options); return true; }
     catch { return false; }
 }
 
@@ -102530,8 +103456,8 @@ async function getMedia(key) {
     catch { return null; }
 }
 
-async function deleteMedia(key) {
-    try { await run('readwrite', store => store.delete(key)); return true; }
+async function deleteMedia(key, options = {}) {
+    try { await run('readwrite', store => store.delete(key), options); return true; }
     catch { return false; }
 }
 
@@ -102842,7 +103768,7 @@ globalThis.addEventListener?.('hearttrace:mv-audio-changed', event => {
     const open = isView() && audioKey() === key;
     if (old) {
         audioBySong.delete(key);
-        if (open) { try { stopPlayback(); } catch {} player.audio = null; }
+        if (open) { const time = currentTime(); try { stopPlayback(); } catch {} player.audio = null; player.clockOffset = time; }
         if (!old.streaming) { try { URL.revokeObjectURL(old.url); } catch {} }
     }
     if (open) { restoreAudio(); try { renderMv(); } catch {} }
@@ -102859,17 +103785,18 @@ function restoreAudio() {
     audioTried.add(key);
     const token = {}, opened = viewTarget();
     audioLoads.set(key, token);
-    void mv_media.getMedia(key).then(row => {
-        if ((row?.blob || row?.mediaUrl) && audioLoads.get(key) === token) {
+    void song_player.loadSongAudio(context, view.songId).then(entry => {
+        if (entry && audioLoads.get(key) === token) {
+            const row = { blob: entry.blob, mediaUrl: entry.streaming ? entry.url : '', name: entry.name, sourceUrl: entry.sourceUrl };
             if (audio_source.isVideoAudioSource(row.blob, row.name) && !isView(opened)) {
                 audioTried.delete(key); audioLoads.delete(key); return;
             }
-            return acceptAudio(row.blob || row.mediaUrl, row.name || '已保存的歌曲', false, target, token, { sourceUrl: row.sourceUrl || '', mediaUrl: row.mediaUrl || '' });
+            return acceptAudio(row.blob || row.mediaUrl, row.name || '已保存的歌曲', target, token, { sourceUrl: row.sourceUrl || '', mediaUrl: row.mediaUrl || '' });
         }
     }).catch(() => audioTried.delete(key));
 }
 
-function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), view.songId), token = {}, details = {}) {
+function acceptAudio(blob, name, target = mv.captureMvTarget(ctx(), view.songId), token = {}, details = {}) {
     const key = audioKey(target);
     const opened = viewTarget();
     if (isView(opened) && audioKey() === key) view.audioStatus = '';
@@ -102896,7 +103823,7 @@ function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), vie
                 URL.revokeObjectURL(url);
                 // Failed automatic restore gets one attempt per open, otherwise
                 // its error redraw would restore the same bad recording forever.
-                if (audioLoads.get(key) === token && !(fromVideo && !persist && error)) audioTried.delete(key);
+                if (audioLoads.get(key) === token && !(fromVideo && error)) audioTried.delete(key);
                 if (error && isView(opened) && audioLoads.get(key) === token) toastError(error);
             }
             if (fromVideo && isView(opened) && audioLoads.get(key) === token) {
@@ -102917,17 +103844,13 @@ function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), vie
             const duration = Number.isFinite(probe.duration) ? probe.duration : 0;
             if ((details.sourceUrl || fromVideo) && duration <= 0) { finish(false, core_text.safeUserError('这段音频无法取得完整时长，原有歌曲未替换。', 'RMT_MV_AUDIO')); return; }
             try {
-                const updated = mv.patchRecord(target.songId, { duration }, target);
-                // A track kept from the song page may predate any storyboard; only a
-                // fresh import must land on the current record.
-                if ((details.sourceUrl || fromVideo) && !updated && persist) { finish(false, core_text.safeUserError('当前歌曲已变化，音频未替换。', 'RMT_MV_AUDIO')); return; }
+                mv.patchRecord(target.songId, { duration }, target);
             }
             catch (error) { finish(false, error); return; }
             const old = audioBySong.get(key);
             if (isView(opened) && audioKey() === key) { stopPlayback(); player.audio = null; }
             audioBySong.set(key, { url, name: core_text.normalizeText(name, 80), duration, target, sourceUrl: details.sourceUrl || '', streaming, fromVideo });
             if (old) { try { URL.revokeObjectURL(old.url); } catch {} }
-            if (persist) void mv_media.putMedia(key, streaming ? null : blob, name, { ...details, ...(streaming ? { mediaUrl: url } : {}) }).then(ok => { if (!ok && isView(opened)) globalThis.toastr?.info?.('这台设备没能记住这首歌，下次打开需要重新选择。', '心迹回廊 · MV'); });
             finish(true);
             if (isView(opened) && audioKey() === key) renderMv();
         };
@@ -102957,43 +103880,49 @@ function cancelMusicLink() {
     view.musicLinkStatus = '';
 }
 
-async function importMusicLink(value) {
+// Both pages mutate the same song audio through songPlayer. The editor keeps
+// only a disposable playback copy; storage receipts and temporary sources stay
+// in the shared owner, so returning to the song page cannot revive stale audio.
+async function importMusicSource(value, isFile) {
     const opened = viewTarget();
-    if (!isView(opened) || player.exporting) return;
-    let sourceUrl;
-    try { sourceUrl = music_link.musicUrl(value); }
-    catch (error) { view.musicLinkStatus = error.message; renderMv(); return; }
+    if (!isView(opened) || player.exporting) return false;
+    const context = ctx(), key = audioKey();
+    const target = mv.captureMvTarget(context, opened.songId);
+    if (!isFile) {
+        try { value = music_link.musicUrl(value); }
+        catch (error) { view.musicLinkStatus = error.message; renderMv(); return false; }
+    }
     cancelMusicLink();
-    const target = mv.captureMvTarget(ctx(), opened.songId), key = audioKey(target);
-    const controller = new AbortController(), token = { signal: controller.signal };
+    const controller = new AbortController(), token = {};
     audioLoads.get(key)?.cancel?.();
     audioLoads.set(key, token); audioTried.add(key);
     const pending = musicLinkImport = { key, controller, token };
-    view.musicLinkInput = sourceUrl; view.musicLinkStatus = '正在读取音乐…';
+    view.musicLinkInput = isFile ? '' : value;
+    view.musicLinkStatus = isFile ? '正在检查音频…' : '正在读取音乐…';
     renderMv();
-    let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 60000);
     try {
-        const media = await music_link.readMusicLink(sourceUrl, { signal: controller.signal });
-        if (musicLinkImport !== pending || !isView(opened) || controller.signal.aborted) return;
-        view.musicLinkStatus = '正在检查音频…'; renderMv();
-        const ok = await acceptAudio(media.blob || media.url, media.name, true, target, token, { sourceUrl: media.sourceUrl });
+        const options = { signal: controller.signal, isCurrent: () => isView(opened) && mv.isCurrentMvTarget(target) };
+        const ok = await (isFile ? song_player.importSongFile(context, opened.songId, value, options)
+            : song_player.importSongLink(context, opened.songId, value, options));
         if (musicLinkImport === pending && isView(opened)) {
-            view.musicLinkStatus = ok ? `${media.resolvedFrom ? '短链接已换成完整歌曲链接。' : ''}${media.streaming ? '已接入在线音轨，与画面共用播放进度。' : '已导入，与画面共用播放进度。'}` : '音频未能导入，原有歌曲未替换。';
-            if (ok && media.resolvedFrom && media.sourceUrl) view.musicLinkInput = media.sourceUrl;
+            view.musicLinkStatus = song_player.songAudioNote(context, opened.songId);
+            const entry = song_player.currentSongAudio(context, opened.songId);
+            if (ok && entry?.sourceUrl) view.musicLinkInput = entry.sourceUrl;
         }
-    } catch (error) {
-        if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = timedOut ? '音乐读取超时，原有歌曲未替换。' : controller.signal.aborted ? '' : /^RMT_MV_LINK_/.test(error?.code || '') ? String(error.message) : '音乐读取失败，原有歌曲未替换。';
+        return ok;
     } finally {
-        clearTimeout(timer);
         if (musicLinkImport === pending) {
             musicLinkImport = null;
-            if (!audioBySong.has(key)) audioTried.delete(key);
-            if (timedOut && isView(opened)) view.musicLinkStatus = '音乐读取超时，原有歌曲未替换。';
+            if (audioLoads.get(key) === token) {
+                audioLoads.delete(key);
+                if (!audioBySong.has(key)) audioTried.delete(key);
+            }
             if (isView(opened)) renderMv();
         }
     }
 }
+
+function importMusicLink(value) { return importMusicSource(value, false); }
 
 async function removeMusic() {
     const opened = viewTarget(), key = audioKey(), entry = audioBySong.get(key);
@@ -103003,23 +103932,17 @@ async function removeMusic() {
     audioLoads.set(key, token); audioTried.add(key);
     view.audioStatus = '正在移除音源…'; renderMv();
     try {
-        if (!await mv_media.deleteMedia(key)) throw core_text.safeUserError('音源未能移除，原有音源保留。', 'RMT_MV_AUDIO_REMOVE');
-        // A newer import or another song must not be cleared by this completion.
-        if (audioLoads.get(key) !== token || audioBySong.get(key) !== entry) return;
-        if (isView(opened)) {
-            const time = currentTime(); stopPlayback();
-            try { player.audio?.removeAttribute?.('src'); player.audio?.load?.(); } catch {}
-            player.audio = null; player.clockOffset = time;
+        if (!await song_player.removeSongAudio(ctx(), opened.songId)) throw core_text.safeUserError('音源未能移除，原有音源保留。', 'RMT_MV_AUDIO_REMOVE');
+        // The shared audio event invalidates both players after a confirmed
+        // deletion (or an explicitly temporary removal), never before it.
+        if (isView(opened) && !song_player.currentSongAudio(ctx(), opened.songId)) {
             view.musicLinkInput = ''; view.musicLinkStatus = '';
         }
-        audioBySong.delete(key); URL.revokeObjectURL(entry.url);
     } catch (error) {
         if (isView(opened) && audioLoads.get(key) === token) toastError(error);
     } finally {
-        if (audioLoads.get(key) === token) {
-            audioLoads.delete(key);
-            if (isView(opened)) { view.audioStatus = ''; renderMv(); }
-        }
+        if (audioLoads.get(key) === token) audioLoads.delete(key);
+        if (isView(opened)) { view.audioStatus = ''; renderMv(); }
     }
 }
 
@@ -104861,7 +105784,7 @@ function handleMvChange(event) {
     }
     if (input?.matches?.('[data-rmt-mv-audio]')) {
         const file = input.files?.[0];
-        if (file) { input.value = ''; cancelMusicLink(); view.musicLinkInput = ''; void acceptAudio(file, file.name, true); }
+        if (file) { input.value = ''; void importMusicSource(file, true).catch(toastError); }
         return true;
     }
     if (input?.matches?.('[data-rmt-mv-image]')) {
@@ -105694,6 +106617,7 @@ __init_autoMemory_incrementalGate_js();
 __init_autoMemory_incrementalView_js();
 __init_autoMemory_instanceLease_js();
 __init_autoMemory_migrateLegacy_js();
+__init_autoMemory_roundContext_js();
 __init_autoMemory_moduleHost_js();
 __init_autoMemory_modulePlans_js();
 __init_autoMemory_moduleRegistry_js();

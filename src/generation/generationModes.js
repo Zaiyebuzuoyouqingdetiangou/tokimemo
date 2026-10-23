@@ -128,7 +128,7 @@ export async function generateMode(mode, options = {}) {
         options = { ...options, contentSelectionRequest: content_selection.readContentSelectionRequest(context, bank, mode, saved) };
     }
     if (!Object.hasOwn(options, 'participantSnapshot') && !options.existing && !options.draftId && !options.participantRegeneration && !options.archiveTarget
-        && !core_cache.loadGenerationRecovery(mode, context)) {
+        && (options.newTask === true || !core_cache.loadGenerationRecovery(mode, context))) {
         options = { ...options, participantSnapshot: routePeople.captureRoutePeople(options.workspaceRoute || mode, context, archive_repository.getImportedMemory(context)) };
     }
     const origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || '');
@@ -143,6 +143,7 @@ export async function generateMode(mode, options = {}) {
         globalThis.toastr?.info?.(`「${core_constants.MODE_LABEL[mode]}」已经在生成/补齐中。`, '心迹回廊');
         return options.participantRegeneration ? { status: 'blocked' } : undefined;
     }
+    if (options.autoMemoryCapture) logicalTask.autoMemoryCapture = options.autoMemoryCapture;
     let result;
     try {
         result = await generateModeOperation(mode, { ...options, logicalTask });

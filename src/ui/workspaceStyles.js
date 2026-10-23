@@ -286,6 +286,7 @@ ${r} .rmt-route-people label{display:flex;align-items:center;gap:8px;min-height:
 ${r} .rmt-route-people select{font:inherit;min-height:44px;width:100%;padding:8px;border:1px solid var(--rmt-theme-border);border-radius:10px;background:var(--rmt-theme-surface-solid);color:inherit}
 ${r} .rmt-route-people fieldset{border:0;margin:6px 0;padding:0;display:flex;flex-wrap:wrap;gap:8px 16px}
 ${r} .rmt-route-people fieldset[hidden]{display:none}
+${r} .rmt-route-people-hint{display:block;margin:2px 0 6px;color:var(--rmt-theme-muted);font-size:calc(12px*var(--rmt-font-scale,1));line-height:1.6}
 ${r} .rmt-voice-page{max-width:760px;margin:auto;padding:clamp(12px,3vw,28px);font-size:calc(16px*var(--rmt-font-scale,1));line-height:1.7}
 ${r} .rmt-voice-page h2{font-size:calc(22px*var(--rmt-font-scale,1));line-height:1.4}
 ${r} .rmt-body .rmt-inbox button.rmt-mail-drawing[data-rmt-paper]{background:var(--rmt-letter-paper)!important;color:var(--rmt-letter-ink)!important;border-color:var(--rmt-letter-line)!important}
