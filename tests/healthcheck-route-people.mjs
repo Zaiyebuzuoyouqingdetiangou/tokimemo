@@ -14,7 +14,7 @@ function storage() {
         getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
 }
 const contextApi = { currentCharacterRuntimeKey: ctx => `${ctx.avatar}|slot:${ctx.characterId}` };
-const people = sourceModule('src/core/participants.js', {}, ['PARTICIPANTS_KEY', 'normalizeParticipantRoster', 'normalizeParticipantSnapshot', 'selectedParticipantSnapshot', 'resolveStoryIdentities', 'storyOwnerLabelAllowed']);
+const people = sourceModule('src/core/participants.js', {}, ['PARTICIPANTS_KEY', 'normalizeParticipantRoster', 'normalizeParticipantSnapshot', 'selectedParticipantSnapshot', 'resolveStoryIdentities', 'storyOwnerLabelAllowed', 'compactCastLabel']);
 const generation = sourceModule('src/core/generationParticipants.js', { participants: people }, ['resolveGenerationParticipantSnapshot', 'deriveGenerationParticipantMemoryBank']);
 const composer = sourceModule('src/core/generationOptions.js', { contextApi, repository: {} }, ['composerScope']);
 function api() {
@@ -230,4 +230,14 @@ test('pages saved with only some of the cast stay readable, and butterfly update
     const butterfly = readFileSync(`${root}/src/modes/butterfly.js`, 'utf8');
     assert.equal((butterfly.match(/mergeButterflyIncremental\([^)]*\)?[^;]*butterflySubjectName\(memoryBank, context\)\)/g) || []).length, 2, 'both update paths pass the current cast');
     assert.match(butterfly, /\.\.\.\(subject \? \{ subject \} : \{\}\)/);
+});
+
+test('a large cast is shown as the first few names plus a count, not the whole roster', () => {
+    assert.equal(people.compactCastLabel('甲、乙、丙、丁、戊'), '甲、乙、丙 等 5 人');
+    assert.equal(people.compactCastLabel('甲、乙、丙'), '甲、乙、丙');
+    assert.equal(people.compactCastLabel('甲'), '甲');
+    assert.equal(people.compactCastLabel(''), '');
+    for (const file of ['src/ui/butterflyView.js', 'src/ui/pastLivesView.js', 'src/ui/timeStoriesView.js']) {
+        assert.match(readFileSync(`${root}/${file}`, 'utf8'), /compactCastLabel\(/, file);
+    }
 });
