@@ -271,3 +271,15 @@ test('world-info style names like 「角色:某某」 are matched and shown with
         assert.match(readFileSync(`${root}/${file}`, 'utf8'), /storyCastLabel\(/, file);
     }
 });
+
+test('butterfly header subject follows the people written on the page, not the stored full roster', () => {
+    const view = readFileSync(`${root}/src/ui/butterflyView.js`, 'utf8');
+    const header = view.slice(view.indexOf('const observerName'), view.indexOf('const speakerName'));
+    assert.match(header, /storyCastLabel\(/, 'header derives the subject from page content');
+    assert.match(header, /session\.nodes\.flatMap/, 'header looks at every observation point');
+    assert.doesNotMatch(header, /compactCastLabel\(session\.subject\)/, 'header no longer prints the stored full roster first');
+    const memory = { memories: [{ id: 'M1', title: '一', summary: '某甲出门。', anchors: [], participants: [] }, { id: 'M2', title: '二', summary: '某甲回来。', anchors: [], participants: [] }],
+        participantsV1: { version: 1, cardType: 'multi', selectedIds: ['a', 'b', 'c', 'd'], people: [
+            { id: 'a', name: '某甲', sourceRefs: [] }, { id: 'b', name: '某乙', sourceRefs: [] }, { id: 'c', name: '某丙', sourceRefs: [] }, { id: 'd', name: '某丁', sourceRefs: [] }] } };
+    assert.equal(api().storyCastLabel(memory, { sourceMemoryIds: ['M1', 'M2'], text: '某甲独白', fallback: '某甲、某乙、某丙、某丁' }), '某甲');
+});
