@@ -145,6 +145,19 @@ export function storyCastLabel(memory, { sourceMemoryIds = [], text = '', fallba
     return fromText.length ? label(fromText) : fallbackLabel;
 }
 
+// 这一页现在「本页人物」选的是谁：指定人物、按档案剧情出场时给出这些人的名字，
+// 其他方式给空，由调用处用存下来的名字。只用于显示，不抽随机、不改设置。
+export function routeCastNames(route, context, memory, storage) {
+    let roster = null;
+    try { roster = participants.normalizeParticipantRoster(memory?.[participants.PARTICIPANTS_KEY]); } catch { roster = null; }
+    if (!roster) return [];
+    let choice;
+    try { choice = readRoutePeople(route, context, memory, storage); } catch { return []; }
+    const ids = choice.strategy === 'specified' ? choice.selectedIds
+        : choice.strategy === 'archive' ? archiveCastIds(roster, memory) : [];
+    return ids.map(id => roster.people.find(person => person.id === id)?.name).filter(Boolean);
+}
+
 // Resolve once at the click/queue boundary. Persist the resulting snapshot with
 // the task; a retry must never draw a second random person or read a new choice.
 export function captureRoutePeople(route, context = contextApi.getContext(), memory = repository.getImportedMemory(context),

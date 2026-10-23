@@ -18,7 +18,7 @@ const people = sourceModule('src/core/participants.js', {}, ['PARTICIPANTS_KEY',
 const generation = sourceModule('src/core/generationParticipants.js', { participants: people }, ['resolveGenerationParticipantSnapshot', 'deriveGenerationParticipantMemoryBank']);
 const composer = sourceModule('src/core/generationOptions.js', { contextApi, repository: {} }, ['composerScope']);
 function api() {
-    return sourceModule('src/core/routeParticipants.js', { contextApi, repository: {}, participants: people, generation, composer }, ['readRoutePeople', 'writeRoutePeople', 'captureRoutePeople', 'archiveCastIds', 'storyCastLabel']);
+    return sourceModule('src/core/routeParticipants.js', { contextApi, repository: {}, participants: people, generation, composer }, ['readRoutePeople', 'writeRoutePeople', 'captureRoutePeople', 'archiveCastIds', 'storyCastLabel', 'routeCastNames']);
 }
 const ctx = { avatar: 'sandbox.png', characterId: 0, name2: '网球沙盒' };
 const bank = (revision = '2000-chat-ext', createdAt = 1000, chatId = 'chat-A') => ({
@@ -244,7 +244,7 @@ test('a large cast is shown as the first few names plus a count, not the whole r
 
 test('butterfly headers name the people in that branch, not the whole roster', () => {
     const source = readFileSync(`${root}/src/ui/butterflyView.js`, 'utf8');
-    const body = source.slice(source.indexOf('function nodeSubjectName'), source.indexOf('export function renderButterfly'));
+    const body = source.slice(source.indexOf('function pageCast'), source.indexOf('export function renderButterfly'));
     const nodeSubjectName = Function('core_participants', 'route_people', `${body}\nreturn nodeSubjectName;`)(people, api());
     const memory = castBank([
         { id: 'M001', title: '雨天', summary: '两人在屋檐下躲雨。', anchors: [], participants: ['顾南星', '我'] },
@@ -270,4 +270,26 @@ test('world-info style names like 「角色:某某」 are matched and shown with
     for (const file of ['src/ui/inboxView.js', 'src/ui/timeStoriesView.js', 'src/ui/pastLivesView.js', 'src/ui/themeSongView.js', 'src/ui/calendarView.js', 'src/ui/butterflyView.js']) {
         assert.match(readFileSync(`${root}/${file}`, 'utf8'), /storyCastLabel\(/, file);
     }
+});
+
+test('butterfly falls back to the page choice (specified or archive cast), not the names saved at first generation', () => {
+    const source = readFileSync(`${root}/src/ui/butterflyView.js`, 'utf8');
+    const body = source.slice(source.indexOf('function pageCast'), source.indexOf('export function renderButterfly'));
+    const a = api(), s = storage();
+    const memory = castBank([{ id: 'M001', title: '雨天', summary: '顾南星在屋檐下躲雨。', anchors: [], participants: [] }]);
+    const stored = '林知夏、沈秋白、顾南星、陆远舟';
+    const run = () => {
+        globalThis.localStorage = s;
+        try { return Function('core_participants', 'route_people', `${body}\nreturn nodeSubjectName;`)(people, a); }
+        finally { delete globalThis.localStorage; }
+    };
+    a.writeRoutePeople('butterfly', { strategy: 'specified', selectedIds: ['p1'] }, ctx, memory, s);
+    globalThis.localStorage = s;
+    const name = run();
+    globalThis.localStorage = s;
+    assert.equal(name({ trueEnding: true, intervention: '没有人名。' }, { subject: stored }, memory, ctx), '林知夏', 'Ω uses the chosen person');
+    assert.equal(name({ sourceMemoryIds: [], intervention: '没有人名。' }, { subject: stored }, memory, ctx), '林知夏');
+    a.writeRoutePeople('butterfly', { strategy: 'archive', selectedIds: [] }, ctx, memory, s);
+    assert.equal(name({ trueEnding: true, intervention: 'x' }, { subject: stored }, memory, ctx), '顾南星', 'archive cast');
+    delete globalThis.localStorage;
 });
