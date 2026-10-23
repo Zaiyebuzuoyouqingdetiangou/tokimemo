@@ -1,4 +1,4 @@
-心迹回廊 1.0.61 / build 1.0.61-r6
+心迹回廊 1.0.61 / build 1.0.61-r7
 基线：最终交付 1.0.60-r1 ZIP 原样解压；本轮独立候选。
 基线 ZIP SHA-256：153f29a56b0f32b114fae4f7ebb657fee280c746830d99ac0fb5ca78bce2675e
 
@@ -20,8 +20,8 @@ python3 tools/verification/run-tests.py：152/152 通过，退出0。
 两次独立输出重建字节一致；--check 与交付运行bundle一致；manifest/index/version/build查询串一致。
 差异复核及红绿证据见 verification/1.0.61/。历史工具缺失不冒称已恢复或执行；本轮使用随1.0.60交付的 tools/verification/。
 
-运行bundle SHA-256：747487bc1bdd5e31296fb8b7e9a35b444bc4baa09947f6afee0babfd5f9840dc
-源模块集合 SHA-256：817fec575d7ac472f9d50db040002edfb6704440b3faa1f54a48a09b73a6fd65
+运行bundle SHA-256：ed3074faecaa67756b5f9b04e65ebd4141e84cddf7f7889a6b6d3ca6a85f70ad
+源模块集合 SHA-256：e701585a6af09be2fe8f3901a0850f8d69a931469c49ab88ce517b20a1a55be3
 
 r2 追加
 7. 本页人物新增「按档案剧情出场」：从档案记忆的参与者、标题、摘要和锚点里找名单人物的名字或世界书关键词（一个字的词不用），只取出场过的人；找不到时报错让用户换方式，不扩成全名单。选择方式下显示每种方式的说明，选这一项时列出当前找到的人物。档案名单本身不改。
@@ -43,6 +43,10 @@ r5 追加
 r6 追加
 11. 蝴蝶效应分歧点标题按节点推断人物：节点引用记忆的参与者/标题/摘要/锚点 → 节点正文点名 → 整页人物（压缩显示）。纯显示，不改存档、不发请求。
    回归：tests/healthcheck-route-people.mjs 新增 1 项。
+
+r7 追加
+12. 自动留忆流式闸门：GENERATION_STARTED 的 dryRun 不再置为生成中；宿主 streamingProcessor 以 isFinished 判断完成（以前只看不存在的 finished 字段）；置位后宿主连续 20 秒无生成迹象自动解除。修复楼层信封整页不画、刷新无效。
+   回归：tests/healthcheck-auto-memory-stream-gate.mjs 3 项。
 
 实际限制
 - 宿主公开 saveWorldInfo 没有可靠持久化回执。现在明确显示“已提交/保存未确认”，不能因此认定服务器已写入；需要刷新酒馆后在世界书核对。原书读取失败时停止，提示检查或重新选择主世界书。
