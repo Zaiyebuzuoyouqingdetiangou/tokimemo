@@ -4,6 +4,7 @@ import * as text from '../core/text.js';
 import * as constants from '../core/constants.js';
 import * as contextApi from '../core/context.js';
 import * as repository from '../archive/repository.js';
+import * as route_people from '../core/routeParticipants.js';
 import * as library from '../archive/library.js';
 import * as cache from '../core/cache.js';
 import * as coordinator from '../core/requestCoordinator.js';
@@ -16,7 +17,12 @@ const esc = text.esc;
 const paragraphs = value => String(value || '').split(/\n+/u).filter(Boolean).map(part => `<p>${esc(part)}</p>`).join('');
 const readOnly = () => !!runtimeState.activeArchiveSnapshot && (runtimeState.activeArchiveReadOnly || runtimeState.activeArchiveSnapshot.backupOnly === true);
 const button = (action, label, id = '', extra = '') => `<button type="button" class="rmt-btn" data-rmt-time-story="${action}" data-rmt-time-story-id="${esc(id)}" ${extra}>${esc(label)}</button>`;
-const nameFor = (session, role) => role === 'char' ? participants.compactCastLabel(session.characterName) : session.userName;
+const episodeText = episode => [episode?.title, episode?.opening, episode?.message, episode?.closing,
+    ...(Array.isArray(episode?.lines) ? episode.lines.map(line => line?.text) : [])].filter(value => typeof value === 'string').join('\n');
+// 多人卡：这一篇写的是谁就显示谁。
+const nameFor = (session, role, episode = null) => role === 'char'
+    ? route_people.storyCastLabel((() => { try { return repository.getImportedMemory(contextApi.getContext()); } catch { return null; } })(), { sourceMemoryIds: episode?.sourceMemoryIds, text: episodeText(episode), fallback: session.characterName })
+    : session.userName;
 const presentation = value => ['modern', 'classical', 'fantasy', 'scifi', 'neutral'].includes(value) ? value : 'neutral';
 const palette = value => ['rose', 'blue', 'moss', 'gold', 'plum', 'slate'].includes(value) ? value : 'slate';
 const mediumIcon = value => ({ phone: 'fa-phone', terminal: 'fa-satellite-dish', relic: 'fa-gem', object: 'fa-hourglass-half', voice: 'fa-wave-square' })[value] || 'fa-wave-square';
@@ -25,7 +31,7 @@ const savedCharacterNameMatches = (value, memory) => participants.storyOwnerLabe
 
 function echoHtml(session, episode, ui) {
     const ends = episode.ends || [];
-    const end = (value, index) => `<div class="rmt-time-end"><small>${index ? '彼端' : '此端'}</small><b>${esc(nameFor(session, value?.role) || '')}</b><span>${esc(value?.time || '')}</span></div>`;
+    const end = (value, index) => `<div class="rmt-time-end"><small>${index ? '彼端' : '此端'}</small><b>${esc(nameFor(session, value?.role, episode) || '')}</b><span>${esc(value?.time || '')}</span></div>`;
     const endpoints = `<div class="rmt-time-connection">${end(ends[0], 0)}<div class="rmt-time-medium" aria-label="联络媒介"><i class="fa-solid ${mediumIcon(episode.medium?.kind)}" aria-hidden="true"></i><span>${esc(episode.medium?.label || '回响')}</span></div>${end(ends[1], 1)}</div>`;
     const lines = Array.isArray(episode.lines) ? episode.lines : [];
     const index = Math.max(0, Math.min(lines.length, Number(ui.dialogueIndex) || 0));
@@ -35,7 +41,7 @@ function echoHtml(session, episode, ui) {
     } else if (index < lines.length) {
         const line = lines[index];
         const endpoint = line.speaker === 'a' ? ends[0] : line.speaker === 'b' ? ends[1] : null;
-        reader = `<article class="rmt-time-line" data-rmt-time-speaker="${['a', 'b'].includes(line.speaker) ? line.speaker : 'narrator'}" aria-live="polite"><header><b>${esc(endpoint ? nameFor(session, endpoint.role) : '回声之间')}</b>${endpoint ? `<small>${esc(endpoint.time)}</small>` : ''}</header>${paragraphs(line.text)}</article><div class="rmt-time-reading-controls">${button('prev-line', '上一句', '', index === 0 ? 'disabled' : '')}<span>${index + 1} / ${lines.length}</span>${button('next-line', index + 1 === lines.length ? '此后' : '下一句')}</div>`;
+        reader = `<article class="rmt-time-line" data-rmt-time-speaker="${['a', 'b'].includes(line.speaker) ? line.speaker : 'narrator'}" aria-live="polite"><header><b>${esc(endpoint ? nameFor(session, endpoint.role, episode) : '回声之间')}</b>${endpoint ? `<small>${esc(endpoint.time)}</small>` : ''}</header>${paragraphs(line.text)}</article><div class="rmt-time-reading-controls">${button('prev-line', '上一句', '', index === 0 ? 'disabled' : '')}<span>${index + 1} / ${lines.length}</span>${button('next-line', index + 1 === lines.length ? '此后' : '下一句')}</div>`;
     } else {
         reader = `<article class="rmt-time-prose rmt-time-closing" aria-live="polite"><small>传递的信息</small>${paragraphs(episode.message)}<hr><h3>回响之后</h3>${paragraphs(episode.closing)}</article><div class="rmt-time-actions">${button('prev-line', '返回最后一句')}${button('replay', '重听回响')}</div>`;
     }

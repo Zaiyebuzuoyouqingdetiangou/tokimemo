@@ -1,6 +1,9 @@
 // Heartbeat Memories r40.2 private-calendar / notebook view.
 import * as core_constants from '../core/constants.js';
 import * as core_text from '../core/text.js';
+import * as core_context from '../core/context.js';
+import * as archive_repository from '../archive/repository.js';
+import * as route_people from '../core/routeParticipants.js';
 import { state as runtimeState } from '../core/state.js';
 import * as modes_calendar from '../modes/calendar.js';
 import * as ui_overlay from './overlay.js';
@@ -381,7 +384,14 @@ function holidayCardMarkup(card) {
     const flow = card?.art?.flow === 'vertical' ? 'vertical' : 'horizontal';
     const calligraphy = core_text.esc(card?.calligraphy || '');
     const message = core_text.esc(card?.message || '');
-    const signature = core_text.esc(card?.signature || '');
+    // 多人卡：落款只写这张卡讲到的人，不把整份名单列出来。
+    let signatureText = card?.signature || '';
+    if (signatureText.includes('、')) {
+        let memory = null;
+        try { memory = archive_repository.getImportedMemory(core_context.getContext()); } catch { memory = null; }
+        signatureText = route_people.storyCastLabel(memory, { text: [card?.message, card?.calligraphy].filter(value => typeof value === 'string').join('\n'), fallback: signatureText });
+    }
+    const signature = core_text.esc(signatureText);
     let content = '';
     if (expression === 'writing') {
         content = `<div class="rmt-calendar-holiday-calligraphy ${flow}">${calligraphy || message}</div>`;
