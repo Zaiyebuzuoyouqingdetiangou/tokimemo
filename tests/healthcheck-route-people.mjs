@@ -241,3 +241,19 @@ test('a large cast is shown as the first few names plus a count, not the whole r
         assert.match(readFileSync(`${root}/${file}`, 'utf8'), /compactCastLabel\(/, file);
     }
 });
+
+test('butterfly headers name the people in that branch, not the whole roster', () => {
+    const source = readFileSync(`${root}/src/ui/butterflyView.js`, 'utf8');
+    const body = source.slice(source.indexOf('function nodeSubjectName'), source.indexOf('export function renderButterfly'));
+    const nodeSubjectName = Function('core_participants', 'route_people', `${body}\nreturn nodeSubjectName;`)(people, api());
+    const memory = castBank([
+        { id: 'M001', title: '雨天', summary: '两人在屋檐下躲雨。', anchors: [], participants: ['顾南星', '我'] },
+        { id: 'M002', title: '训练', summary: '会长让全员跑圈。', anchors: [], participants: [] },
+    ]);
+    const session = { subject: '林知夏、沈秋白、顾南星、陆远舟' };
+    assert.equal(nodeSubjectName({ sourceMemoryIds: ['M001'], monologue: '' }, session, memory), '顾南星', 'from the referenced memory');
+    assert.equal(nodeSubjectName({ sourceMemoryIds: ['M002'], monologue: '' }, session, memory), '沈秋白', 'world-info keyword in the referenced memory');
+    assert.equal(nodeSubjectName({ sourceMemoryIds: [], intervention: '陆远舟终于开口。' }, session, memory), '陆远舟', 'from the branch text');
+    assert.equal(nodeSubjectName({ sourceMemoryIds: [], intervention: '没有人名。' }, session, memory), '林知夏、沈秋白、顾南星 等 4 人', 'falls back to the page cast, compacted');
+    assert.equal(nodeSubjectName({ intervention: 'x' }, { subject: '单人' }, { memories: [] }), '单人', 'single-character cards are unchanged');
+});

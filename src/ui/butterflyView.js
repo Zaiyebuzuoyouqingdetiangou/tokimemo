@@ -8,7 +8,26 @@ import * as core_context from '../core/context.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as core_participants from '../core/participants.js';
+import * as route_people from '../core/routeParticipants.js';
+import * as archive_repository from '../archive/repository.js';
 import * as ui_overlay from './overlay.js';
+
+// 多人卡：每个分歧点只写这一段剧情里的人。先看这段引用的档案记忆里有谁，
+// 再看正文里点到了谁；都找不到才用整页的人物。旧内容不用重新生成。
+function nodeSubjectName(node, session, memory) {
+    let roster = null;
+    try { roster = core_participants.normalizeParticipantRoster(memory?.[core_participants.PARTICIPANTS_KEY]); } catch { roster = null; }
+    const fallback = core_participants.compactCastLabel(session.subject);
+    if (!roster || !node) return fallback;
+    const names = ids => core_participants.compactCastLabel(ids.map(id => roster.people.find(person => person.id === id)?.name).filter(Boolean).join('、'));
+    const refs = new Set(Array.isArray(node.sourceMemoryIds) ? node.sourceMemoryIds : []);
+    const memories = (Array.isArray(memory?.memories) ? memory.memories : []).filter(item => refs.has(item?.id));
+    const fromMemories = memories.length ? route_people.archiveCastIds(roster, { memories }) : [];
+    if (fromMemories.length) return names(fromMemories);
+    const text = [node.label, node.monologue, node.intervention, node.sourceMemoryAnchor].filter(value => typeof value === 'string').join('\n');
+    const fromText = route_people.archiveCastIds(roster, { memories: [{ summary: text }] });
+    return fromText.length ? names(fromText) : fallback;
+}
 
 export function renderButterfly() {
     const session = runtimeState.activeSession;
@@ -25,19 +44,20 @@ export function renderButterfly() {
     const endingIndex = session.nodes.length - 1;
     const isOmega = !!selected.trueEnding;
     const observerName = core_text.esc(core_participants.compactCastLabel(session.subject) || runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2 || '{{char}}');
+    const speakerName = core_text.esc(nodeSubjectName(selected, session, runtimeState.activeArchiveSnapshot || (() => { try { return archive_repository.getImportedMemory(core_context.getContext()); } catch { return null; } })()) || observerName);
     const observationPanel = isOmega
         ? `<section class="rmt-terminal-block rmt-observation-screen rmt-omega-screen">
             <div class="rmt-terminal-section-title">III. OBSERVATION POINT Ω // 现世终局观测</div>
             <div class="rmt-record-code">${core_text.esc(selected.code || '> OBSERVATION POINT #OMEGA')}</div>
             <div class="rmt-signal rmt-omega-signal"><div class="rmt-signal-noise"></div><div class="rmt-signal-center">[ ALL PARALLEL SUBJECT FEEDS CLOSED ]<br>[ RETURNING TO MAIN WORLDLINE ]</div></div>
-            <div class="rmt-mono rmt-omega-monologue"><b>CURRENT WORLD SUBJECT // 现世 ${observerName} 最终发言</b><br>${core_text.esc(selected.intervention || (selected.prosePending ? '正文待补。观测点已经留下，可以再补这一段。' : ''))}</div>
+            <div class="rmt-mono rmt-omega-monologue"><b>CURRENT WORLD SUBJECT // 现世 ${speakerName} 最终发言</b><br>${core_text.esc(selected.intervention || (selected.prosePending ? '正文待补。观测点已经留下，可以再补这一段。' : ''))}</div>
           </section>
           <section class="rmt-terminal-block rmt-system-block"><div class="rmt-terminal-section-title">IV. SYSTEM NOTE // 观测完成</div><div class="rmt-system-note">${core_text.esc(selected.systemNote)}</div></section>`
         : `<section class="rmt-terminal-block rmt-observation-screen">
             <div class="rmt-terminal-section-title">III. OBSERVATION SCREEN // 平行世界观测</div>
             <div class="rmt-record-code">${core_text.esc(selected.code)}</div>
             ${expanded_cg_view.expandedCgHtml(session, {kind:'butterfly-node',containerId:selected.id}, !!runtimeState.activeArchiveSnapshot, {placeholder:'<div class="rmt-signal" data-rmt-signal><div class="rmt-signal-noise"></div><div class="rmt-signal-center">[ 等待记录这一刻的画面 ]</div></div>'})}
-            <div class="rmt-mono"><b>PARALLEL SUBJECT // 平行世界 ${observerName} 本人发言</b><br>${core_text.esc(selected.monologue || (selected.prosePending ? '正文待补。世界设定已经留下，可以再补这一段。' : ''))}</div>
+            <div class="rmt-mono"><b>PARALLEL SUBJECT // 平行世界 ${speakerName} 本人发言</b><br>${core_text.esc(selected.monologue || (selected.prosePending ? '正文待补。世界设定已经留下，可以再补这一段。' : ''))}</div>
           </section>
           <section class="rmt-terminal-block rmt-intervention-block"><div class="rmt-terminal-section-title">IV. CURRENT-WORLD RESPONSE // 现世回应</div><div class="rmt-intervention">${core_text.esc(selected.intervention)}</div></section>
           <section class="rmt-terminal-block rmt-system-block"><div class="rmt-terminal-section-title">V. SYSTEM NOTE // 系统评估</div><div class="rmt-system-note">${core_text.esc(selected.systemNote)}</div></section>`;
