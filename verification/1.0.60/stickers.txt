@@ -1,0 +1,33 @@
+(node:14) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ two UI field edits merge with the latest confirmed card instead of overwriting each other (14.597422ms)
+✔ failed card save keeps the previous state and does not poison the next queued edit (8.494929ms)
+✔ asynchronous image/caption edits are latest-wins and cannot recreate deleted stickers (5.508685ms)
+✔ switching characters during an image edit cannot modify a copied sticker id in the new character (5.527813ms)
+✔ late lorebook receipt updates only lore metadata, preserving newer card edits (10.480606ms)
+✔ lorebook failure keeps saved card content and allows a later synchronization (8.164261ms)
+✔ bootstrap and runtime copies share the same per-character write queue (7.60173ms)
+✔ a host refreshing the same character object does not break queued saves (5.823901ms)
+✔ two characters sharing one book retain separate rules and removal touches only the owner (8.119835ms)
+✔ shared book read-modify-write operations serialize across different characters (8.307132ms)
+✔ ambiguous legacy entries and unrelated rows are preserved on write and removal (7.633677ms)
+✔ unambiguous unchanged legacy entry migrates in place and preserves user settings (7.809426ms)
+✔ legacy entry filtered to another character is never adopted or removed (9.54982ms)
+✔ book replacement while a write waits does not redirect the operation (6.351211ms)
+✔ late newly-created book binding receipt cannot overwrite a newer user selection (10.895059ms)
+✔ unreadable bound book (null) cannot be overwritten or removed (6.145977ms)
+✔ unreadable bound book ({}) cannot be overwritten or removed (5.25496ms)
+✔ unreadable bound book ({"entries":[]}) cannot be overwritten or removed (5.02488ms)
+✔ new book absent from the refreshed host list may be created, but a failed read of a listed book may not (11.309701ms)
+✔ unchanged old lore receipts do not trigger new startup migration reads (6.392461ms)
+✔ bootstrap and runtime lore copies share the same book queue (11.935276ms)
+✔ two cards without a book can create and share a same-named destination without lost entries (7.739343ms)
+✔ missing refresh API cannot turn an unreadable same-named book into a new empty one (5.774928ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 279.638056

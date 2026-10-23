@@ -1,0 +1,10 @@
+(node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✖ character writes use the single-avatar public bulk receipt and retain other fields (6.278172ms)
+✖ a real host HTTP 500 bulk receipt does not become a successful card save (2.63327ms)
+✖ legacy host writes confirm through a fresh character reload (3.214598ms)
+✖ legacy optimistic mutation is not accepted when its server save fails (2.887464ms)
+✖ an unavailable legacy readback leaves last confirmed plugin data visible (4.749585ms)
+✖ failed book reads and stale names cannot overwrite the old same-named book (6.613567ms)
+✖ unacknowledged book saves never create a confirmed hash and do not loop on startup (5.271255ms)
+✖ unacknowledged removals remain retryable and do not recreate rules on edits (5.160592ms)

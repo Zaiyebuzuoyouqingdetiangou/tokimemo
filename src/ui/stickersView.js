@@ -16,6 +16,7 @@ const esc = value => text.esc(value);
 const OWNER_TABS = ['char', 'user', 'pair', 'other'];
 const drafts = new Map(); // scope → unsaved drawing, kept while the page is closed
 const redrawing = new Set(); // saved sticker ids being redrawn one at a time
+const imageEdits = new Map(); // scope + sticker → latest explicit picture/caption operation
 let active = null, modal = null;
 
 function ensureStyles() {
@@ -35,6 +36,16 @@ function report(view, message) {
 }
 function failure(view, error) { report(view, text.safeErrorSummary(error) || '这次操作没有完成，请重试。'); }
 function data() { return store.readStickerData(hostContext()); }
+function imageEditKey(context, id) { return JSON.stringify([store.stickerScope(context), id]); }
+function beginImageEdit(context, id) {
+    const key = imageEditKey(context, id), scope = store.stickerScope(context), token = {};
+    imageEdits.set(key, token);
+    return {
+        isCurrent: () => imageEdits.get(key) === token && store.stickerScope(context) === scope && store.stickerScope(hostContext()) === scope,
+        finish: () => { if (imageEdits.get(key) === token) imageEdits.delete(key); },
+    };
+}
+function cancelImageEdit(context, id) { imageEdits.delete(imageEditKey(context, id)); }
 function label(owner) {
     const ctx = hostContext();
     return owner === 'user' ? '我' : store.ownerLabel(owner, ctx);
@@ -99,6 +110,7 @@ function askText(view, title, value, placeholder) {
 // ---------- 页面 ----------
 function loreSummary(current) {
     const state = stickers.loreState(current, hostContext());
+    if (state.unconfirmed) return state.removed ? '撤除已提交 · 待确认' : '已提交 · 保存未确认';
     if (state.written) return `已加入「${state.book}」`;
     return state.book ? `未加入 · 主世界书「${state.book}」` : '未加入';
 }
@@ -185,12 +197,13 @@ function cutHtml(view) {
 }
 function loreHtml(view) {
     const current = data(), ctx = hostContext(), state = stickers.loreState(current, ctx);
-    const where = state.written ? `已在主世界书「${state.book}」里写了一条「${store.LORE_COMMENT}」。撤掉这一条就完全恢复原样。`
+    const where = state.unconfirmed ? `已向「${state.book}」提交${state.removed ? '撤除' : '表情规则'}，酒馆未提供保存回执。请刷新酒馆后在世界书中核对；也可以手动重试。`
+        : state.written ? `已在主世界书「${state.book}」里写了一条「${store.LORE_COMMENT}」。撤掉时只移除本角色可确认归属的条目。`
         : state.book ? `${label('char')}已有主世界书「${state.book}」，会在里面追加一条「${store.LORE_COMMENT}」，不动其他条目。`
-            : `${label('char')}还没有主世界书，会新建「${label('char')}的表情包」并绑定为主世界书。`;
+            : `${label('char')}还没有主世界书，会新建一份带独立后缀的表情包世界书并绑定，不覆盖已有同名书。`;
     const char = esc(label('char'));
     return `<main class="rmt-stk">${head('世界书')}`
-        + `<section class="rmt-stk-card"><h3>加入世界书</h3><p class="rmt-stk-muted">${esc(where)}</p><p class="rmt-stk-muted">剧情里写到${char}用手机等通讯设备发消息时，${char}会在那些消息里挑合适的表情发；正文叙述里不发。</p><div class="rmt-stk-two"><button type="button" class="rmt-stk-primary" data-stk-action="lore-write"${state.empty ? ' disabled' : ''}>${state.written ? '更新世界书' : '加入世界书'}</button><button type="button" class="rmt-stk-danger" data-stk-action="lore-remove"${state.written ? '' : ' disabled'}>撤掉这一条</button></div></section>`
+        + `<section class="rmt-stk-card"><h3>加入世界书</h3><p class="rmt-stk-muted">${esc(where)}</p><p class="rmt-stk-muted">剧情里写到${char}用手机等通讯设备发消息时，${char}会在那些消息里挑合适的表情发；正文叙述里不发。</p><div class="rmt-stk-two"><button type="button" class="rmt-stk-primary" data-stk-action="lore-write"${state.empty ? ' disabled' : ''}>${state.written ? '更新世界书' : '加入世界书'}</button><button type="button" class="rmt-stk-danger" data-stk-action="lore-remove"${state.tracked ? '' : ' disabled'}>${state.removed ? '重试撤除' : '撤掉这一条'}</button></div></section>`
         + `<section class="rmt-stk-field">条目预览<pre class="rmt-stk-pre">${esc(state.content || '还没有表情。')}</pre><small>只写名字和一句意思，不放图片地址${state.content ? `，约 ${state.content.length} 字` : ''}；放在最新几条消息之前，不受世界书预算限制，只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情、或插件更新后打开聊天，都会自动更新已写入的条目。</small></section></main>`;
 }
 
@@ -362,7 +375,7 @@ async function chibiFilteredPeople(view, owner, people) {
             const filter = target.dataset.stkFilter === 'yes', remember = !!m.body.querySelector('[data-stk-filter-remember]')?.checked;
             const texts = result.rows.map((row, index) => m.body.querySelector(`[data-stk-filter-text="${index}"]`)?.value.trim() ?? row.text);
             finish(filter ? apply(texts) : people); closeStickerDialog();
-            if (remember) { const current = data(); void stickers.saveStickerData({ ...current, settings: { ...current.settings, chibiFilter: filter ? 'auto' : 'off' } }, hostContext()).catch(() => {}); }
+            if (remember) void stickers.saveStickerData(current => ({ ...current, settings: { ...current.settings, chibiFilter: filter ? 'auto' : 'off' } }), hostContext()).catch(() => {});
         });
     });
 }
@@ -406,10 +419,10 @@ async function saveDraft(view) {
         if (store.stickerScope(hostContext()) !== draft.scope) {
             return report(view, '保存途中换了角色，这组表情没有写进去。回到原来的角色再点保存，不会重复上传。');
         }
-        const current = store.readStickerData(ctx);
         const title = store.cleanLine(draft.idea, 10) || `${label(draft.owner)}的一组`;
         const pack = { id: store.newStickerId('pack'), owner: draft.owner, title, style: draft.styleId, idea: draft.idea, createdAt: Date.now(), cover: list[0].id, people: draft.people, stickers: list };
-        await stickers.saveStickerData({ ...current, packs: [...current.packs, pack] }, ctx);
+        await stickers.saveStickerData(current => ({ ...current, packs: [...current.packs, pack] }), ctx,
+            { isCurrent: () => drafts.get(view.scope) === draft && store.stickerScope(hostContext()) === draft.scope });
         discardDraft(view.scope);
         const saved = store.readStickerData(ctx).packs.find(row => row.id === pack.id);
         go(view, 'pack', { packId: pack.id, tab: draft.owner });
@@ -420,17 +433,19 @@ async function saveDraft(view) {
     }
 }
 
-function findSticker(id) {
-    const current = data();
+function findSticker(id, context = hostContext()) {
+    const current = store.readStickerData(context);
     for (const pack of current.packs) { const sticker = pack.stickers.find(row => row.id === id); if (sticker) return { current, pack, sticker }; }
     return null;
 }
-async function updateSticker(view, id, change) {
-    const found = findSticker(id); if (!found) return null;
-    const { current } = found;
-    const packs = current.packs.map(pack => ({ ...pack, stickers: pack.stickers.map(row => row.id === id ? { ...row, ...change } : row) }));
-    await stickers.saveStickerData({ ...current, packs }, hostContext());
-    return findSticker(id);
+async function updateSticker(view, id, change, { context = hostContext(), isCurrent = null } = {}) {
+    const scope = store.stickerScope(context);
+    if (view.scope && view.scope !== scope) return null;
+    const result = await stickers.saveStickerData(current => {
+        if (!current.packs.some(pack => pack.stickers.some(row => row.id === id))) return null;
+        return { ...current, packs: current.packs.map(pack => ({ ...pack, stickers: pack.stickers.map(row => row.id === id ? { ...row, ...change } : row) })) };
+    }, context, { isCurrent: () => store.stickerScope(hostContext()) === scope && (!isCurrent || isCurrent()) });
+    return result ? findSticker(id, context) : null;
 }
 function stickerDialog(view, id) {
     const found = findSticker(id); if (!found) return;
@@ -447,66 +462,70 @@ function stickerDialog(view, id) {
     if (!m) return;
     const status = value => { const node = m.body.querySelector('[data-stk-dialog-status]'); if (node) node.textContent = value || ''; };
     const setRedrawButton = busy => { const node = m.body.querySelector('[data-stk-do="redraw"]'); if (node) { node.disabled = busy; node.textContent = busy ? '正在重画…' : '单张重画'; } };
-    if (redrawing.has(id)) { setRedrawButton(true); status('这一张正在重画…'); }
+    const redrawKey = imageEditKey(hostContext(), id);
+    if (redrawing.has(redrawKey)) { setRedrawButton(true); status('这一张正在重画…'); }
     const reopen = () => { if (modal === m) { paint(view); stickerDialog(view, id); } };
     const run = work => Promise.resolve().then(work).catch(error => { if (modal === m) status(text.safeErrorSummary(error) || '这次没有完成，请重试。'); });
     m.body.addEventListener('change', event => {
         const field = event.target.dataset?.stkEdit; if (!field) return;
         void run(async () => {
-            const value = event.target.value;
+            const value = event.target.value, ctx = hostContext();
+            if (store.stickerScope(ctx) !== view.scope) return;
             if (field === 'name') {
                 const name = store.cleanStickerName(value, 8);
                 if (!name) { event.target.value = findSticker(id)?.sticker.name || ''; return status('名字不能为空。'); }
-                await updateSticker(view, id, { name });
+                await updateSticker(view, id, { name }, { context: ctx });
                 if (findSticker(id)?.sticker.name !== name) status('同组里已有这个名字，已自动加了数字。');
                 return reopen();
             }
-            if (field === 'meaning') { await updateSticker(view, id, { meaning: value }); return status('已保存。'); }
+            if (field === 'meaning') { await updateSticker(view, id, { meaning: value }, { context: ctx }); return status('已保存。'); }
             status('正在叠字…');
-            const now = findSticker(id)?.sticker; if (!now) return;
-            const saved = await stickers.saveStickerPicture({ base: now.base, caption: value }, hostContext());
-            await updateSticker(view, id, { caption: value, ...saved });
-            reopen();
+            const now = findSticker(id, ctx)?.sticker; if (!now) return;
+            const edit = beginImageEdit(ctx, id);
+            try {
+                const saved = await stickers.saveStickerPicture({ base: now.base, caption: value }, ctx);
+                await updateSticker(view, id, { caption: value, ...saved }, { context: ctx, isCurrent: edit.isCurrent });
+                reopen();
+            } finally { edit.finish(); }
         });
     });
     m.body.addEventListener('click', event => {
         const action = event.target.closest('[data-stk-do]')?.dataset.stkDo; if (!action) return;
         void run(async () => {
-            const now = findSticker(id); if (!now) return closeStickerDialog();
+            const ctx = hostContext(); if (store.stickerScope(ctx) !== view.scope) return;
+            const now = findSticker(id, ctx); if (!now) return closeStickerDialog();
             if (action === 'copy') {
                 await navigator.clipboard?.writeText(store.stickerToken(now.pack.owner, now.sticker.name, hostContext()));
                 return status('暗号已复制，粘进输入框就能发。');
             }
             if (action === 'cover') {
-                const current = data();
-                await stickers.saveStickerData({ ...current, packs: current.packs.map(pack => pack.id === now.pack.id ? { ...pack, cover: id } : pack) }, hostContext());
+                await stickers.saveStickerData(current => ({ ...current, packs: current.packs.map(pack => pack.id === now.pack.id ? { ...pack, cover: id } : pack) }), ctx);
                 return reopen();
             }
             if (action === 'replace') return m.body.querySelector('[data-stk-replace-file]').click();
             if (action === 'delete') {
-                const current = data();
-                await stickers.saveStickerData({ ...current, packs: current.packs.map(pack => pack.id === now.pack.id ? { ...pack, stickers: pack.stickers.filter(row => row.id !== id) } : pack) }, hostContext());
+                cancelImageEdit(ctx, id);
+                await stickers.saveStickerData(current => ({ ...current, packs: current.packs.map(pack => pack.id === now.pack.id ? { ...pack, stickers: pack.stickers.filter(row => row.id !== id) } : pack) }), ctx);
                 closeStickerDialog(); paint(view); return report(view, `已删掉「${now.sticker.name}」。`);
             }
             if (action === 'redraw') {
-                if (redrawing.has(id)) return status('这一张正在重画，请等它画完。');
-                redrawing.add(id); setRedrawButton(true);
+                if (redrawing.has(redrawKey)) return status('这一张正在重画，请等它画完。');
+                redrawing.add(redrawKey); setRedrawButton(true);
+                const edit = beginImageEdit(ctx, id);
                 let piece = null;
                 try {
                     status('正在单张重画…');
-                    const ctx = core_context.currentCharacterGuard();
                     // Redraw with the appearance this set was drawn with, so it still matches.
                     const people = now.pack.people?.length === 2 ? now.pack.people : await stickers.stickerPeople(ctx);
                     piece = await stickers.drawSingleSticker({ owner: now.pack.owner, styleId: now.pack.style || 'chibi-dumpling',
                         item: { name: now.sticker.name, prompt: now.sticker.prompt || now.sticker.meaning || now.sticker.name }, people, context: ctx,
-                        targetKey: `single:${id}`, onProgress: update => { if (modal === m) status(progressText(update)); } });
+                        targetKey: `single:${redrawKey}`, onProgress: update => { if (modal === m) status(progressText(update)); } });
                     status('正在保存…');
                     const saved = await stickers.saveStickerPicture({ blob: piece.blob, caption: now.sticker.caption }, ctx);
-                    if (store.stickerScope(hostContext()) !== store.stickerScope(ctx)) throw text.safeUserError('重画途中换了角色，新图没有替换。', 'RMT_STICKER_SCOPE');
-                    await updateSticker(view, id, saved);
+                    await updateSticker(view, id, saved, { context: ctx, isCurrent: edit.isCurrent });
                 } finally {
                     if (piece) URL.revokeObjectURL(piece.preview);
-                    redrawing.delete(id); setRedrawButton(false);
+                    edit.finish(); redrawing.delete(redrawKey); setRedrawButton(false);
                 }
                 return reopen();
             }
@@ -516,12 +535,18 @@ function stickerDialog(view, id) {
         const file = event.target.files?.[0]; event.target.value = '';
         if (!file) return;
         void run(async () => {
+            const ctx = hostContext(); if (store.stickerScope(ctx) !== view.scope) return;
+            const now = findSticker(id, ctx)?.sticker; if (!now) return;
+            const edit = beginImageEdit(ctx, id);
             status('正在保存图片…');
-            const blob = await stickers.prepareImport(file), now = findSticker(id)?.sticker;
-            const saved = blob.type === 'image/gif' || blob.type === 'image/webp'
-                ? { base: await stickers.uploadStickerImage(blob, hostContext()) } : await stickers.saveStickerPicture({ blob, caption: now?.caption }, hostContext());
-            await updateSticker(view, id, { base: saved.base, url: saved.url || saved.base, ...(saved.url ? {} : { caption: '' }) });
-            reopen();
+            try {
+                const blob = await stickers.prepareImport(file);
+                if (!edit.isCurrent()) return;
+                const saved = blob.type === 'image/gif' || blob.type === 'image/webp'
+                    ? { base: await stickers.uploadStickerImage(blob, ctx) } : await stickers.saveStickerPicture({ blob, caption: now.caption }, ctx);
+                await updateSticker(view, id, { base: saved.base, url: saved.url || saved.base, ...(saved.url ? {} : { caption: '' }) }, { context: ctx, isCurrent: edit.isCurrent });
+                reopen();
+            } finally { edit.finish(); }
         });
     });
 }
@@ -577,11 +602,14 @@ async function importFiles(view, files, packId = '') {
     if (store.stickerScope(hostContext()) !== store.stickerScope(ctx)) {
         return report(view, `导入途中换了角色，${added.length} 张图片已存进酒馆图片文件夹，但没有加进表情包。回到原来的角色再导入。`);
     }
-    const current = store.readStickerData(ctx);
-    let packs = current.packs, target = packId;
-    if (packId && packs.some(pack => pack.id === packId)) packs = packs.map(pack => pack.id === packId ? { ...pack, stickers: [...pack.stickers, ...added] } : pack);
-    else { target = store.newStickerId('pack'); packs = [...packs, { id: target, owner: 'other', title: '导入的表情', createdAt: Date.now(), cover: added[0].id, stickers: added }]; }
-    await stickers.saveStickerData({ ...current, packs }, ctx);
+    const target = packId || store.newStickerId('pack');
+    const saved = await stickers.saveStickerData(current => {
+        if (packId && !current.packs.some(pack => pack.id === packId)) return null;
+        const packs = packId ? current.packs.map(pack => pack.id === packId ? { ...pack, stickers: [...pack.stickers, ...added] } : pack)
+            : [...current.packs, { id: target, owner: 'other', title: '导入的表情', createdAt: Date.now(), cover: added[0].id, stickers: added }];
+        return { ...current, packs };
+    }, ctx, { isCurrent: () => store.stickerScope(hostContext()) === view.scope });
+    if (!saved) return report(view, '原来那组已经删除，图片文件已保留，但没有重新创建这一组。');
     go(view, 'pack', { packId: target, tab: 'other' });
     report(view, `已导入 ${added.length} 张。点开每张可以改名字和意思，名字就是暗号里的表情名。`);
 }
@@ -596,18 +624,18 @@ async function handleAction(view, action, target) {
         return view.fileInput.click();
     }
     if (action === 'rename-pack') {
-        const pack = data().packs.find(row => row.id === view.packId); if (!pack) return;
+        const ctx = hostContext(), pack = store.readStickerData(ctx).packs.find(row => row.id === view.packId); if (!pack) return;
         const value = await askText(view, '改组名', pack.title, '比如：外星人日常');
-        if (value === null) return;
-        const current = data();
-        await stickers.saveStickerData({ ...current, packs: current.packs.map(row => row.id === pack.id ? { ...row, title: store.cleanLine(value, 20) } : row) }, hostContext());
+        if (value === null || !current(view)) return;
+        await stickers.saveStickerData(latest => ({ ...latest, packs: latest.packs.map(row => row.id === pack.id ? { ...row, title: store.cleanLine(value, 20) } : row) }), ctx);
         return paint(view);
     }
     if (action === 'delete-pack') {
-        const pack = data().packs.find(row => row.id === view.packId); if (!pack) return;
+        const ctx = hostContext(), pack = store.readStickerData(ctx).packs.find(row => row.id === view.packId); if (!pack) return;
         if (!await confirmDialog(view, '删除这一组', `「${packTitle(pack)}」里的 ${pack.stickers.length} 个表情会从表情面板和世界书里去掉。图片文件仍留在酒馆图片文件夹。`, '删除')) return;
-        const current = data();
-        await stickers.saveStickerData({ ...current, packs: current.packs.filter(row => row.id !== pack.id) }, hostContext());
+        if (!current(view)) return;
+        for (const sticker of pack.stickers) cancelImageEdit(ctx, sticker.id);
+        await stickers.saveStickerData(latest => ({ ...latest, packs: latest.packs.filter(row => row.id !== pack.id) }), ctx);
         go(view, 'home'); return report(view, '已删除这一组。');
     }
     if (action === 'list') return makeList(view);
@@ -628,16 +656,20 @@ async function handleAction(view, action, target) {
     if (action === 'save-draft') return saveDraft(view);
     if (action === 'lore-write') {
         const result = await stickers.writeStickerLore(hostContext());
-        paint(view); return report(view, result.created ? `已新建「${result.book}」并绑定为${label('char')}的主世界书。` : `已写进「${result.book}」。`);
+        paint(view); return report(view, `已向「${result.book}」提交表情规则，保存尚未确认。请刷新酒馆后核对。`
+            + (result.legacyPreserved ? '归属不明的旧表情包条目已保留，请在世界书中确认。' : ''));
     }
     if (action === 'float') {
         const on = store.setStickerFloat(!store.stickerFloatEnabled(hostContext()), hostContext());
         paint(view); return report(view, on ? '聊天页会显示悬浮小兔子。' : '悬浮小兔子已关，可以从魔法棒菜单里的「表情包」打开。');
     }
     if (action === 'lore-remove') {
+        const ctx = hostContext();
         if (!await confirmDialog(view, '撤掉这一条', `会从世界书里删掉「${store.LORE_COMMENT}」这一条，其他条目不动。`, '撤掉')) return;
-        const book = await stickers.removeStickerLore(hostContext());
-        paint(view); return report(view, book ? `已从「${book}」撤掉。` : '已撤掉。');
+        if (!current(view)) return;
+        const book = await stickers.removeStickerLore(ctx);
+        paint(view); return report(view, (book ? `已向「${book}」提交撤除请求，尚未确认保存。请刷新酒馆后核对。` : '没有已关联的表情规则。')
+            + (store.readStickerData(hostContext()).lore.legacyPreserved ? '归属不明的旧表情包条目已保留，请在世界书中确认。' : ''));
     }
 }
 
@@ -658,9 +690,11 @@ function bindView(view) {
     view.root.addEventListener('change', event => {
         if (event.target.matches('[data-stk-chibi]')) {
             readIdeaForm(view);
-            const current = data(), value = event.target.value;
-            const settings = { ...current.settings }; if (value) settings.chibiFilter = value; else delete settings.chibiFilter;
-            void stickers.saveStickerData({ ...current, settings }, hostContext()).catch(error => failure(view, error));
+            const value = event.target.value;
+            void stickers.saveStickerData(latest => {
+                const settings = { ...latest.settings }; if (value) settings.chibiFilter = value; else delete settings.chibiFilter;
+                return { ...latest, settings };
+            }, hostContext()).catch(error => failure(view, error));
         }
     });
 }

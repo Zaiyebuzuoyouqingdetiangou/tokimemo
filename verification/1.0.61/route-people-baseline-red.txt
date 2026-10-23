@@ -1,0 +1,245 @@
+✖ a normal archive increment preserves the chosen person instead of selecting the whole roster (2.577629ms)
+✖ upgrade restores the latest saved V1 choice within this archive lifetime (0.673965ms)
+✔ exact revision legacy settings remain readable when old timestamps are unavailable (0.414422ms)
+✔ an explicit newer default is not replaced with an older specified preference (0.271271ms)
+✔ choice isolation includes route, character, chat and a recreated archive (0.402895ms)
+✖ the production archive timestamp keeps same-archive rebuild preferences and isolates deletion followed by creation (0.614888ms)
+✔ migration excludes future, foreign and ambiguous revision records (1.197359ms)
+✖ a storage write failure keeps the new in-session choice ahead of an older disk value (0.362275ms)
+✖ removing a selected person asks for correction instead of silently expanding to everybody (0.81199ms)
+✖ random and ensemble choices retain their existing semantics and frozen snapshots remain unchanged (0.444667ms)
+✖ a restored choice stays usable for the session if migration cannot be saved (0.39267ms)
+✖ a successful newer choice from another tab is visible to an already-open page (0.374023ms)
+✖ unavailable browser storage reports an unsaved choice without breaking capture (0.300645ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 4
+ℹ fail 9
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 95.843205
+
+✖ failing tests:
+
+test at tests/healthcheck-route-people.mjs:35:1
+✖ a normal archive increment preserves the chosen person instead of selecting the whole roster (2.577629ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   selectedIds: [],
+  +   strategy: 'default'
+  -   selectedIds: [
+  -     'p1'
+  -   ],
+  -   strategy: 'specified'
+    }
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-route-people.mjs:39:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { strategy: 'default', selectedIds: [] },
+    expected: { strategy: 'specified', selectedIds: [ 'p1' ] },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-route-people.mjs:50:1
+✖ upgrade restores the latest saved V1 choice within this archive lifetime (0.673965ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   selectedIds: [],
+  +   strategy: 'default'
+  -   selectedIds: [
+  -     'p1'
+  -   ],
+  -   strategy: 'specified'
+    }
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-route-people.mjs:54:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { strategy: 'default', selectedIds: [] },
+    expected: { strategy: 'specified', selectedIds: [ 'p1' ] },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-route-people.mjs:83:1
+✖ the production archive timestamp keeps same-archive rebuild preferences and isolates deletion followed by creation (0.614888ms)
+  AssertionError [ERR_ASSERTION]: full rebuild retains the identity of the same archive
+  + actual - expected
+  
+    {
+  +   selectedIds: [],
+  +   strategy: 'default'
+  -   selectedIds: [
+  -     'p1'
+  -   ],
+  -   strategy: 'specified'
+    }
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-route-people.mjs:90:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: { strategy: 'default', selectedIds: [] },
+    expected: { strategy: 'specified', selectedIds: [ 'p1' ] },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-route-people.mjs:106:1
+✖ a storage write failure keeps the new in-session choice ahead of an older disk value (0.362275ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   selectedIds: [],
+  +   strategy: 'ensemble'
+  -   selectedIds: [
+  -     'p1'
+  -   ],
+  -   strategy: 'specified'
+    }
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-route-people.mjs:111:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { strategy: 'ensemble', selectedIds: [] },
+    expected: { strategy: 'specified', selectedIds: [ 'p1' ] },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-route-people.mjs:114:1
+✖ removing a selected person asks for correction instead of silently expanding to everybody (0.81199ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-route-people.mjs:118:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /重新选择/,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-route-people.mjs:121:1
+✖ random and ensemble choices retain their existing semantics and frozen snapshots remain unchanged (0.444667ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  +   'p1',
+      'p2'
+    ]
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-route-people.mjs:125:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'p1', 'p2' ],
+    expected: [ 'p2' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-route-people.mjs:131:1
+✖ a restored choice stays usable for the session if migration cannot be saved (0.39267ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   selectedIds: [],
+  +   strategy: 'default'
+  -   selectedIds: [
+  -     'p1'
+  -   ],
+  -   strategy: 'specified'
+    }
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-route-people.mjs:135:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { strategy: 'default', selectedIds: [] },
+    expected: { strategy: 'specified', selectedIds: [ 'p1' ] },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-route-people.mjs:140:1
+✖ a successful newer choice from another tab is visible to an already-open page (0.374023ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - true
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-route-people.mjs:142:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-route-people.mjs:147:1
+✖ unavailable browser storage reports an unsaved choice without breaking capture (0.300645ms)
+  Error: blocked
+      at get (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-route-people.mjs:149:91)
+      at Object.writeRoutePeople (eval at sourceModule (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-route-people.mjs:9:12), <anonymous>:22:79)
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-route-people.mjs:151:24)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)

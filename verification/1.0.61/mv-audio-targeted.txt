@@ -1,0 +1,17 @@
+(node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS temporary song audio is usable in MV without a disk row
+PASS MV temporary import can be removed while device storage is unavailable
+PASS MV removal invalidates song page audio before returning and releasing
+PASS MV replacement appears on the song page when returning
+PASS failed MV replacement keeps durable audio and its duration
+PASS failed MV removal retains both players and the durable row
+PASS leaving MV cancels a pending file probe before any storage write
+PASS changing chats during MV import cannot write to either song
+PASS MV physical commit remains authoritative when its receipt arrives after leaving
+PASS a delayed MV receipt cannot overwrite a newer song page import
+PASS a silent video cannot replace an existing MV song
+PASS video import requires decoded audio data as well as a real audio track
+PASS changing the song itself during MV import rejects its old target before writing
+PASS changing the song while its audio write is pending aborts before storage commit
+MV audio integration: 14/14 passed

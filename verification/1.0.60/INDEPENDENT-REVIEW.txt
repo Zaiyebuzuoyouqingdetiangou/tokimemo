@@ -1,0 +1,50 @@
+心迹回廊 1.0.60 独立人工差异复核
+时间：2026-10-23 UTC
+工作树：/workspace/scratch/6ca743277155/tokimemo-fix-1.0.60
+比较基线：b69e7a7（1.0.59-r1）
+审查者：独立只读 review_boundaries agent；没有编辑产品源码、测试、提交或推送。
+
+结论
+本轮最终功能差异未发现尚未解决、已复现的 High / Medium 问题。两项原始缺陷的目标场景及取消、并发、迟到回执、失败保旧和角色隔离边界均有通过的验证。该结论仅限本轮差异及下述实际执行范围，不是全仓无缺陷保证，也不是专用安全扫描通过。
+
+覆盖范围
+完整阅读 CURRENT、dev/PROJECT.md，以及 stickerLore.js、stickerStore.js、stickersView.js、songPlayer.js 的最终功能差异；检查其原调用路径和已有持久化/操作序号机制。检查 README、SECURITY、index、manifest 和 releaseNotes 的版本/说明变更。生成 bundle 本次只记录哈希，构建一致性与完整打包回归由主任务负责。
+
+世界书边界
+- 所有权使用已有角色 avatar 作用域；新增条目设置宿主 characterFilter，模型生成的正文不参与授予条目归属或写目标权限。
+- 角色级队列外加全局 Symbol 书名队列，包含读取、复制、修改、保存和新建绑定；不同角色及 bootstrap/runtime 副本共享同一本书的锁。
+- 已有主书 null、缺失 entries、数组 entries 均停止，不伪造空书覆盖；宿主返回对象先克隆，保存失败不通过引用污染宿主缓存。
+- 老条目仅在保存回执、完整正文、hash 与唯一绑定或明确独占 filter 均满足时认领；排除、多人、tag、空 filter 与归属不明条目保留。
+- 异步阶段重查角色身份与原主书；新建绑定迟到后不以本地赋值覆盖用户的新主书选择。移除使用原 lore.book，不改为当前新选择的书。
+- 未修改 loreState 的 stale 条件，旧回执不因缺少 owner 自动触发启动迁移扫描。
+
+音源边界
+- 只对明确 unsaved 的本页临时状态放宽更换/移除；已知持久音源、读到持久行、新收到的持久回执均保旧。
+- 每个 key 记录尚未完成回执的存储操作；旧写已提交但回执迟到，且后续读写同时失败时，不允许临时 fallback 覆盖或移除它。
+- 原操作序号、AbortController、isCurrent、已提交结果权威和 URL 回收路径保留；没有增加远端请求、付费生成、模型输入、凭证处理或 HTML 执行入口。
+
+独立发现并在本轮解决
+1. 已绑定世界书读回 null 可能当空书覆盖原有用户条目，或移除时清掉本地回执。用独立执行复现后已改为失败保旧。
+2. 新建书绑定回执迟到时，本地赋值可能覆盖用户刚选择的另一主书。用独立执行复现后已增加回执后的选择检查。
+3. 新建 null 分支可跳过缺失的刷新 API 而相信旧书名列表。提出后已要求刷新与列表 API 均存在；最终独立执行得到 RMT_STICKER_LORE_READ，保存次数为 0。
+4. 音源旧物理提交回执迟到 + 后续读写都失败的组合可能被临时 fallback 越过。与实现代理讨论后增加 unsettledStorage 保护，并验证组合回归通过。
+
+最终执行证据
+- node --experimental-vm-modules --test tests/healthcheck-extras-stickers.mjs：退出 0，23 / 23 通过。
+- node --experimental-vm-modules tests/healthcheck-extras-audio.mjs：退出 0，26 / 26 通过。
+- git diff --check：退出 0。
+- 独立动态加载测试 fixture（未写入仓库）验证：null 读取保全原用户条目与回执；绑定迟到保全新主书选择；排除 filter、多人 filter、tag filter、空 filter 各自写入再移除均保留旧条目，共 6 项通过。缺刷新 API 的独立执行亦确认拒绝且零保存。
+- 较早独立负面执行另确认：保存失败不改宿主返回对象；换主书后的移除仅作用于旧记录书。最终固定回归覆盖角色切换、同书并发、副本队列、同名新建、旧记录保留及无启动迁移。
+
+限制与待真实宿主检查
+- Codex Security 专用工具及其所需引用资源不可用；以上为独立人工安全差异审查与 Node 模拟宿主验证，不能标为专用扫描通过。
+- 未实测 iPhone、TT/SillyTavern UI、真实 IndexedDB 故障、真实网络错误和多浏览器标签。Node VM 的 ExperimentalWarning 为运行时提示，测试没有失败。
+- 新建世界书依赖宿主公开刷新 API / 书名列表的一致性。宿主若内部吞掉刷新错误并仍给出陈旧列表，插件无法从该公开回执证明刷新成功；本轮没有新增私有资源调用或跨客户端锁。全局队列只覆盖当前 JavaScript realm 内的插件写入，不能序列化其他客户端或宿主外部编辑。
+- getMedia 的 null 仍沿用既有“无记录或读取失败”合同；修复只声明移除本页临时音源，不声称磁盘删除成功。旧未认领世界书内容可能继续生效，界面会提示人工检查，而不会猜测归属删除。
+
+最终文件 SHA-256
+src/core/stickerLore.js  5220f62aec594b2ae7961330e61a361d57fcf1d7c8768d58c9a1a2d7938d931c
+src/core/stickerStore.js  b5b5d7c57310485db097e23f08a5e0cd97aa84d64036bf63515d685ce7e2cf57
+src/ui/stickersView.js  f120531ef841a370590133a9cd236aa47f71020335392cfcf07d051a720cdd7f
+src/ui/songPlayer.js  0c37e681acbf60c9d3ed2a7dc098223e0b4b5513677147a75c846d6019e05a55
+dist/heartbeatMemories.bundle.js  938c438f8775bb2db3f0fa948837dd7f557f035074d7c4e3817926fbcfd6fb45

@@ -1,0 +1,50 @@
+心迹回廊 1.0.61 — 独立只读有限范围差异复核
+日期：2026-10-23 UTC
+候选：/workspace/scratch/6ca743277155/tokimemo-fix-1.0.61
+基线：/workspace/scratch/6ca743277155/recheck-1.0.60/tokimemo-main
+审查者：review_boundaries；自动留忆另委派 review_capture161 独立复核。
+
+风险优先结论
+按本轮最终澄清的合同，未发现尚未解决、新增且可复现的 High / Medium 问题。两项修复分别解决本页人物随普通增量重置，以及并行生成共享自动留忆捕获状态的问题。
+这是指定源文件的人工差异复核和定向模拟验证，不是全仓审计、专用 Codex Security 扫描或真实宿主验收。
+
+范围与方法
+已读 dev/PROJECT.md 和 CURRENT 第 2 节；比较指定六个源码文件的基线/候选差异，并追踪实际角色作用域、档案创建时间、人物 ID、逻辑任务登记、恢复 origin 绑定和请求分段路径。没有改源码、测试或构建产物，没有执行全套、commit、push 或联网。
+最终本地命令：node --test tests/healthcheck-route-people.mjs tests/healthcheck-auto-memory-capture.mjs
+退出 0，20 / 20 通过（人物 14，自动留忆 6）。最终次数含主任务追加的 newTask 入口修复后独立重跑。
+
+本页人物
+1. V2 键以角色 runtime key、chatId、createdAt 生命周期和 route 隔离；普通 archiveRevision 增量不再丢失指定人物。archive roster 本身未被改成页面的子集。
+2. 旧 V1 精确 revision 优先；跨 revision 迁移只接受同卡、同聊天、同 route、createdAt 到当前 revision 时间范围内的记录。选择最新有效记录；同时间冲突不猜测。旧记录保留，迁移写失败仍有本页临时状态。
+3. 存储失败时本页新选择优先于旧磁盘值，并在 UI 提示未保存；保存成功后不使用旧内存影子覆盖其他标签页的新设置。localStorage getter 拒绝访问也有保护。
+4. 已选人物不在当前 roster 时明确要求重新选择，不静默扩大为全名单。生成边界仍冻结 participantSnapshot；恢复 recipe 原有 frozenInputs 和 random 的已捕获结果未改。
+5. 新增人物由 createParticipantId 生成 UUID / 随机 ID；normalize 保留已有 ID，完全重建沿用原或明确传入的 roster，没有按数组位置重新编号的路径。用户主动改已有人的名字仍沿用该 ID，属于现有编辑合同。
+6. 主任务追加修复“旧恢复草稿仍存在，但用户明确开始新任务”的入口：generateMode 仅在 newTask === true 时允许越过旧 recovery 存在检查，捕获当前页面人物；与后续 generateModeOperation 在 newTask 下不使用 recoveryExisting 的语义一致。独立复核这一行及实际入口回归：新任务捕获 p1；继续旧任务不附新快照；显式 participantSnapshot 保持原对象。既有 existing / draftId / participantRegeneration / archiveTarget 防护未放宽，旧恢复 recipe 未改写。
+
+生命周期合同澄清及保留的失败记录
+最初任务提到“不得继承重建档案”。独立检查发现真实 importOperation.js 的 createdAt 表达式为：
+  Number(mergeExisting?.createdAt || existing?.createdAt) || now
+因此同档案 fullRebuild 也保留 createdAt。独立脚本 review161-route-rebuild.mjs 按“完全重建应回 default”的初始预期运行，退出 1，实际返回原 specified/p1。
+主任务随后明确：项目的完全重建仍属同一档案，应保留同人物页面设置；仅删除后新建是新生命周期。本轮不改变既有 createdAt 语义。上述失败被归类为初始合同表述过宽，不作为已修复缺陷或未解决缺陷；未删除该复现记录。
+按澄清后的合同，独立从生产表达式生成 fixture，确认完全重建保持选择、existing=null 的删除后新建隔离；结合 ID 唯一性、旧 ID 移除后重选，以及卡/聊天/route 隔离，共 7 项独立检查通过。主任务也补入生产表达式驱动的固定回归，现包含在人物 14 项中。
+
+自动留忆捕获
+1. opaque handle 的有效状态存于 WeakMap，只由模块步骤创建；generationModes 将该句柄绑定到发起者 logicalTask，generationRequest 仅从登记任务取得它。模型字段、普通对象或已结束句柄不能创建有效捕获权限。
+2. requestTasks 的 origin 重绑定仍指向同一 logicalTask，因此恢复/分段沿用自己的句柄；普通生成和另一个自动留忆步骤不会借用其后缀、成就或手帐批注。
+3. 非 owner 传 null 清理不影响其他捕获。round abort 删除状态，迟到响应不能写入该捕获或污染另一个活动句柄。finish 移除监听器并使句柄不可重用。
+4. 捕获时复制手帐页的 pageId/text，批注仅接受本次请求页面 ID。未改变成就证据判定、持久化权限、恢复 recipe 和已有成功段保存规则；没有增加模型请求。
+自动留忆子审查独立补测 6 项通过：输入快照复制、拒绝未请求页、abort 失效、其他并发捕获保留、预取消句柄无效、伪造/结束句柄不可复用。
+
+限制与风险说明
+- 本次只跑指定定向测试；未执行完整套件、真实 UI、真实模型、真实并发网络、手机或 TT/SillyTavern 宿主验证。自动留忆 fixture 保留生产入口、任务登记和分段器，替换 provider、持久化边界、UI 和具体模式正文。
+- 时间不完整的旧档案只能精确 revision 兼容；无法证明同生命周期的 V1 记录不会被猜测认领。角色 runtime key 仍沿用既有严格卡身份，不为卡内容变化跨身份迁移选择。
+- 自动留忆一个逻辑任务内多分段采用最后捕获包的行为是已有基线语义，本轮仅隔离任务，没有重新设计成就聚合。
+- 专用 Codex Security 未执行，不可将本报告标为专用扫描通过。
+
+被审查最终源码 SHA-256
+src/core/routeParticipants.js 31d30086683e4c330f4cce842a5579c7b49aefd6d444cd1cd8a931b005cf5037
+src/ui/routeParticipants.js 2144534de15633ea94a9b0e5edb808b314082f55786ef49da4ad8e3f62755b37
+src/generation/achievementCapture.js 86a8889b48d8af13a24553654fec233c577c947e57be88f7b880236259333c7b
+src/generation/generationRequest.js 9807704ae4083bef269db89c09afdba8749c8c8b951f3e885d2a9396d8173bce
+src/generation/generationModes.js d07d7735c79f31c3bf38fc2fa1f13cdb70ebc02d22625f99b26b2a96322f578a
+src/autoMemory/moduleHost.js ac4d25658d7ecfa5c0d45fb415b3e31ea733a632ad991f7dab0cfc2858125a58

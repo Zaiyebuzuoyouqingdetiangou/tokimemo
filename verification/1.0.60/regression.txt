@@ -1,0 +1,160 @@
+✔ an existing 40-ticket v1 record can make its 41st draw without losing old letters (13.328236ms)
+✔ 500 additional real rounds preserve ticket, letter and achievement references, including failed rounds (5561.693968ms)
+✔ larger history keeps schema, uniqueness, active-ticket and bounded-field validation (2.970872ms)
+✔ the real scheduler completes both room steps under one fixed origin and logical task (31.086351ms)
+✔ chat switch during first step persistence prevents the next real scheduler step (17.014836ms)
+✔ chat-scope cancellation during first step persistence prevents the next real scheduler step (19.036355ms)
+(node:32) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ lifecycle replacement during first step persistence prevents the next real scheduler step (18.064518ms)
+✔ plan disable during first step persistence prevents the next real scheduler step (81.732709ms)
+✔ archive replacement during first step persistence prevents the next real scheduler step (28.869134ms)
+✔ plan revision replacement during first step persistence prevents the next real scheduler step (22.796991ms)
+✔ scheduler stop during first step persistence prevents the next real scheduler step (19.459462ms)
+✔ chat changes at journal.read: await resumption cannot issue another request or save an achievement (17.534675ms)
+✔ chat changes at provider: await resumption cannot issue another request or save an achievement (25.326651ms)
+✔ chat changes at journal.save: await resumption cannot issue another request or save an achievement (21.039177ms)
+✔ chat changes at recovery.read: await resumption cannot issue another request or save an achievement (15.084764ms)
+✔ chat changes at cache.hydrate: await resumption cannot issue another request or save an achievement (16.472987ms)
+✔ hiding the panel during an authorized round does not cancel its remaining step (18.983657ms)
+✔ an import may advance the frozen revision only to its own committed live revision (12.212367ms)
+✔ concurrent newer archive cannot advance the round's archive fence or issue a next generation (11.669844ms)
+✔ committed result without revision cannot advance the round's archive fence or issue a next generation (11.685839ms)
+✔ noop after external archive change cannot advance the round's archive fence or issue a next generation (15.898316ms)
+✔ deferred import cannot advance the round's archive fence or issue a next generation (11.207952ms)
+✔ cancelled import cannot advance the round's archive fence or issue a next generation (11.760728ms)
+✔ failed import cannot advance the round's archive fence or issue a next generation (11.163346ms)
+✔ assign of a disabled plan aborts an active provider immediately; re-enabling cannot revive the round (14.619024ms)
+✔ commit of a disabled plan aborts an active provider immediately; re-enabling cannot revive the round (13.489084ms)
+✔ the real due-floor host round imports automatically and carries its committed revision into the draw and module (17.004532ms)
+✔ the due-floor import chain stops at archive.import after a chat switch and settles its job as cancelled (13.925219ms)
+✔ the due-floor import chain stops at recovery.read after a chat switch and settles its job as cancelled (22.073401ms)
+✔ the due-floor import chain stops at recovery.write after a chat switch and settles its job as cancelled (16.091432ms)
+✔ backup transaction cancels at open without stale writes (2.79969ms)
+✔ backup transaction cancels at read without stale writes (0.833423ms)
+✔ backup transaction cancels at put without stale writes (0.796558ms)
+✔ backup transaction commits normally without stale writes (0.428404ms)
+(node:39) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a full source rebuild reproduces the checked-in runtime deterministically (1802.259158ms)
+✔ runtime imports link successfully and the complete graph matches the initializer inventory (326.274683ms)
+✔ builder works without a preexisting bundle and reflects changed source (163.011557ms)
+✔ release notes generation embeds the complete README only when requested (70.688254ms)
+(node:40) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS normal link import commits audio and duration together
+PASS cancel during probe preserves old audio and duration
+PASS remove during probe cannot resurrect audio
+PASS new file import supersedes old link and is cancellable too
+PASS cancel during actual IDB write aborts transaction and keeps old row
+PASS cancel after commit respects transaction result without compensation
+PASS confirmed import remains visible when its replacement fails before commit
+PASS confirmed removal remains visible when its replacement fails before commit
+PASS late completion of an older committed write cannot replace a newer confirmed write
+PASS storage failure preserves old player and storyboard duration
+PASS first import retains temporary playback when device storage is unavailable
+PASS temporary audio can be replaced repeatedly while storage writes keep failing
+PASS temporary audio can be removed when storage deletion fails
+PASS cancelling replacement of temporary audio preserves its original URL and duration
+PASS a failed late removal cannot clear a newer temporary replacement
+PASS removing a temporary track cancels its pending replacement without resurrection
+PASS successful storage recovery makes the replacement durable and preserves it on later failure
+PASS memory-only replacement and removal work when both reads and writes are unavailable
+PASS a delayed durable receipt prevents failed replacement from treating its row as temporary, readable=true
+PASS a delayed durable receipt prevents failed removal from treating its row as temporary, readable=true
+PASS a delayed durable receipt prevents failed replacement from treating its row as temporary, readable=false
+PASS a delayed durable receipt prevents failed removal from treating its row as temporary, readable=false
+PASS failed remove keeps existing audio
+PASS chat change keeps result in origin and cannot patch destination duration
+PASS late storage restore cannot replace newly imported audio
+PASS mvMedia optional guard cancels before write and leaves default calls working
+Audio healthcheck: 26/26 passed
+✔ /workspace/scratch/6ca743277155/tokimemo-fix-1.0.60/tests/healthcheck-extras-audio.mjs (294.150808ms)
+(node:41) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ two UI field edits merge with the latest confirmed card instead of overwriting each other (20.643232ms)
+✔ failed card save keeps the previous state and does not poison the next queued edit (9.633194ms)
+✔ asynchronous image/caption edits are latest-wins and cannot recreate deleted stickers (7.04093ms)
+✔ switching characters during an image edit cannot modify a copied sticker id in the new character (6.7835ms)
+✔ late lorebook receipt updates only lore metadata, preserving newer card edits (16.805503ms)
+✔ lorebook failure keeps saved card content and allows a later synchronization (10.164088ms)
+✔ bootstrap and runtime copies share the same per-character write queue (7.738542ms)
+✔ a host refreshing the same character object does not break queued saves (8.71126ms)
+✔ two characters sharing one book retain separate rules and removal touches only the owner (10.018342ms)
+✔ shared book read-modify-write operations serialize across different characters (10.10483ms)
+✔ ambiguous legacy entries and unrelated rows are preserved on write and removal (10.624788ms)
+✔ unambiguous unchanged legacy entry migrates in place and preserves user settings (9.579834ms)
+✔ legacy entry filtered to another character is never adopted or removed (10.446837ms)
+✔ book replacement while a write waits does not redirect the operation (6.828972ms)
+✔ late newly-created book binding receipt cannot overwrite a newer user selection (12.672532ms)
+✔ unreadable bound book (null) cannot be overwritten or removed (7.300614ms)
+✔ unreadable bound book ({}) cannot be overwritten or removed (7.543443ms)
+✔ unreadable bound book ({"entries":[]}) cannot be overwritten or removed (8.885458ms)
+✔ new book absent from the refreshed host list may be created, but a failed read of a listed book may not (13.840533ms)
+✔ unchanged old lore receipts do not trigger new startup migration reads (13.023967ms)
+✔ bootstrap and runtime lore copies share the same book queue (12.55264ms)
+✔ two cards without a book can create and share a same-named destination without lost entries (7.811409ms)
+✔ missing refresh API cannot turn an unreadable same-named book into a new empty one (6.305183ms)
+✔ saving one role does not hide the other role persona (4.903439ms)
+✔ explicitly clearing a saved role restores its own source and preserves the other manual look (3.533014ms)
+✔ clearing both roles restores both sources with one host read (1.174957ms)
+✔ matched external preset retains priority over an untouched saved look (0.957536ms)
+✔ nonempty editor override is preserved without rereading card sources (1.492397ms)
+✔ missing unselected role does not read sources or enter the picture (0.800474ms)
+✔ multiplayer clear remains bound to participant ID and selected source (0.935544ms)
+✔ missing source stays empty instead of borrowing the other role source (0.548461ms)
+✔ 无关记忆编号不能为虚构往事授权 (4.026193ms)
+✔ 空编号也不能把已完成的求婚降级成生活设定 (4.695552ms)
+✔ 真实但无关的 anchor 不能只填在隐藏字段里 (0.537194ms)
+✔ 正确编号与正文中的真实 anchor 可以通过 (3.681172ms)
+✔ 可见真实 anchor 不能为同段另一个无关求婚往事授权 (1.209769ms)
+✔ 逗号后省略的共同主语仍不能掩护新历史 (0.838079ms)
+✔ 包裹真实 anchor 的回忆和日期不被当成新事件 (3.971587ms)
+✔ 同一已引用记忆的其他完整 anchor 仍可叙述，不必反复写首个 anchor (0.670161ms)
+✔ 未引用记忆的真实 anchor 不能替当前引用覆盖无关历史 (0.67636ms)
+✔ 已引用往事旁的当下观察、未来建议及角色独立过去继续保留 (4.91066ms)
+✔ anchor 的空格差异沿用已有匹配规则 (0.432369ms)
+✔ 普通当下观察与未来建议不强制引用往事 (2.048999ms)
+✔ 普通 advice 不添加额外的证据要求 (0.353082ms)
+✔ 建议字段不能夹带未验证的共同往事 (0.332702ms)
+✔ 旧记录保留可读且不再冒充验证通过，不原地修改 (0.571024ms)
+✔ 旧记录里的混合虚构往事保持原文且不继续显示为 verified (0.456675ms)
+✔ 新有效记录显示仍重新核对当前档案 (1.492166ms)
+✔ 旧情报的界面不再显示假依据标记 (0.862005ms)
+✔ 校验失败的付费结果仅保留原始待检查，不作为有效记录保存 (1.173825ms)
+✔ 完整 JSON 的字符串中含代码围栏仍按原文保留 (19.816649ms)
+✔ 多个完整对象选择末尾实际回答 (4.327438ms)
+✔ 完整示例后实际回答截断不能保存示例 (1.466818ms)
+✔ 围栏示例不能遮蔽后面截断的实际回答 (0.43912ms)
+✔ 后续未关闭围栏内的实际回答优先于前面的示例 (0.383978ms)
+✔ 末尾实际回答的小格式错误应本地修复，不回退示例 (0.247225ms)
+✔ 末尾实际回答的注释和中文引号仍可修补 (0.304019ms)
+✔ 末尾完整但无效的实际回答不能回退示例 (0.386161ms)
+✔ 末尾实际对象的单引号与未引用 key 不能让前面示例冒充回答 (1.173685ms)
+✔ 末尾未引用 key 的截断对象不能回退示例 (0.468953ms)
+✔ 前文未配对大括号不妨碍独立 JSON 围栏 (0.258682ms)
+✔ 有效正文后的孤立说明括号不冒充新回答 (0.887422ms)
+✔ 真实截断仍保留截断分类，不补造正文 (0.264121ms)
+✔ 信件已完整正文和损坏可选小画的兼容路径保留 (2.255545ms)
+(node:105) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a generic HTTP 500 never reinstalls: TLS certificate verify failed (19.050166ms)
+✔ a generic HTTP 500 never reinstalls: Internal Server Error (4.991145ms)
+✔ a generic HTTP 500 never reinstalls: Unexpected token < in JSON (2.652772ms)
+✔ a generic HTTP 500 never reinstalls: Authentication failed (3.696475ms)
+✔ a thrown JSON parser failure never reinstalls (3.820699ms)
+✔ a proven local-change conflict on main retains the existing overwrite path (5.280637ms)
+✔ a local-change conflict on a test branch does not overwrite (6.696271ms)
+✔ a host reinstall exception exposes only a local summary and never retries (3.088386ms)
+✔ Git untracked-file refusal and a thrown local-change refusal are recognized (11.183179ms)
+✔ an authorization denial never becomes an overwrite even with conflict-like detail (3.309283ms)
+✔ unknown host failures expose only a local summary (8.695827ms)
+✔ a successful pull and the busy guard retain their behavior (4.429399ms)
+ℹ tests 115
+ℹ suites 0
+ℹ pass 115
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5705.64978

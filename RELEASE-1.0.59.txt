@@ -1,0 +1,21 @@
+心迹回廊 1.0.59 / build 1.0.59-r1
+
+基线：main 412ca036cba2cca388a6b756c79b057416b6b361
+提交目标：测试（在 a66531767ed07abe89865051d8fb8952acc6c1a7 上保留已有开发资料）
+
+修复本次 main 体检发现的 8 项问题：
+1. 自动留忆整轮聊天/档案隔离及取消。
+2. 第 41 轮票据与长期揭晓历史被误判损坏。
+3. 单方手填或清空外貌后的来源恢复。
+4. 印象曲导入取消、移除和替换的异步竞争。
+5. 贴图字段、异步图片和世界书回执的旧快照覆盖。
+6. 普通更新错误误触发 GitHub 覆盖安装。
+7. 最后一段 JSON 截断/无效时误用前面的示例。
+8. 情报编号冒充历史依据，旧记录未核实仍显示依据。
+
+构建入口：python3 tools/verification/build.py . --sync-release-notes
+回归入口：python3 tools/verification/run-tests.py
+验证明细见 verification/1.0.59/HEALTHCHECK.txt。
+
+未进行真实 SillyTavern / TT / iPhone、真实付费模型、Suno 或浏览器 IndexedDB 真机测试。
+Codex Security 专用预检资源在当前环境不可用；执行的是独立人工差异安全复核和本地边界测试，未取得专用扫描回执。

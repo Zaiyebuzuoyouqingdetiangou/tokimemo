@@ -48,7 +48,8 @@ export async function requestValidatedSegment(prompt, status, options, validator
         throw core_requestCoordinator.createGenerationAbortError();
     }
     prompt = cg_policy.cgPromptForSegment(prompt, options);
-    if (generation_achievement.achievementCaptureArmed()) prompt += generation_achievement.achievementPromptSuffix();
+    const achievementCapture = generation_achievement.achievementCaptureForTask(logicalTask);
+    if (achievementCapture) prompt += generation_achievement.achievementPromptSuffix(achievementCapture);
     validator = cg_policy.cgSegmentValidator(validator, options);
     const parentTrace = generationTrace(options);
     const taskTrace = core_taskTrace.startTaskTrace('', options?.mode, parentTrace);
@@ -76,7 +77,7 @@ export async function requestValidatedSegment(prompt, status, options, validator
             : '';
         try {
             const received = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options);
-            const raw = generation_achievement.stripAchievementField(received);
+            const raw = generation_achievement.stripAchievementField(received, achievementCapture);
             core_taskTrace.beginStage(options.taskTrace, 'validate');
             let value;
             try { value = core_requestCoordinator.validateGeneratedSegment(raw, validator); }

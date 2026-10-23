@@ -18,13 +18,35 @@ function openDb() {
     return dbPromise;
 }
 
-function run(mode, action) {
+function run(mode, action, { signal, isCurrent, onCommitted } = {}) {
     return openDb().then(db => new Promise((resolve, reject) => {
+        const cancelled = () => signal?.aborted || (isCurrent && !isCurrent());
+        if (cancelled()) { reject(new DOMException('已取消', 'AbortError')); return; }
         const tx = db.transaction(STORE, mode);
-        const request = action(tx.objectStore(STORE));
-        tx.oncomplete = () => resolve(request?.result);
-        tx.onerror = () => reject(tx.error || request?.error || new Error('indexedDB failed'));
-        tx.onabort = () => reject(tx.error || new Error('indexedDB aborted'));
+        let request;
+        const cleanup = () => signal?.removeEventListener?.('abort', abort);
+        const abort = () => {
+            // If the transaction already committed, its completion is authoritative.
+            // Never compensate with a later write that could overwrite a newer action.
+            try { tx.abort(); } catch { /* The complete/abort event resolves the outcome. */ }
+        };
+        tx.oncomplete = () => {
+            cleanup();
+            try { onCommitted?.(); } catch { /* UI notification cannot undo a committed write. */ }
+            resolve(request?.result);
+        };
+        tx.onerror = () => { cleanup(); reject(tx.error || request?.error || new Error('indexedDB failed')); };
+        tx.onabort = () => { cleanup(); reject(tx.error || new DOMException('已取消', 'AbortError')); };
+        signal?.addEventListener?.('abort', abort, { once: true });
+        try {
+            if (cancelled()) { abort(); return; }
+            request = action(tx.objectStore(STORE));
+            if (mode === 'readwrite' && isCurrent) request.onsuccess = () => {
+                // Request success precedes the transaction commit and still
+                // permits aborting if the owning song changed during the write.
+                try { if (cancelled()) abort(); } catch { abort(); }
+            };
+        } catch (error) { abort(); cleanup(); reject(error); }
     }));
 }
 
@@ -32,8 +54,8 @@ export function mediaKey(kind, scope, songId, shotId = '') {
     return [kind, scope, songId, shotId].join('\u001f');
 }
 
-export async function putMedia(key, blob, name = '', details = {}) {
-    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now(), ...(details.sourceUrl ? { sourceUrl: details.sourceUrl } : {}), ...(!blob && details.mediaUrl ? { mediaUrl: details.mediaUrl } : {}), ...(typeof details.artist === 'string' && details.artist ? { artist: details.artist.slice(0, 80) } : {}), ...(typeof details.coverUrl === 'string' && /^https:\/\//.test(details.coverUrl) ? { coverUrl: details.coverUrl } : {}) })); return true; }
+export async function putMedia(key, blob, name = '', details = {}, options = {}) {
+    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now(), ...(details.sourceUrl ? { sourceUrl: details.sourceUrl } : {}), ...(!blob && details.mediaUrl ? { mediaUrl: details.mediaUrl } : {}), ...(typeof details.artist === 'string' && details.artist ? { artist: details.artist.slice(0, 80) } : {}), ...(typeof details.coverUrl === 'string' && /^https:\/\//.test(details.coverUrl) ? { coverUrl: details.coverUrl } : {}) }), options); return true; }
     catch { return false; }
 }
 
@@ -42,7 +64,7 @@ export async function getMedia(key) {
     catch { return null; }
 }
 
-export async function deleteMedia(key) {
-    try { await run('readwrite', store => store.delete(key)); return true; }
+export async function deleteMedia(key, options = {}) {
+    try { await run('readwrite', store => store.delete(key), options); return true; }
     catch { return false; }
 }

@@ -1,0 +1,29 @@
+(node:5) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS normal link import commits audio and duration together
+PASS cancel during probe preserves old audio and duration
+PASS remove during probe cannot resurrect audio
+PASS new file import supersedes old link and is cancellable too
+PASS cancel during actual IDB write aborts transaction and keeps old row
+PASS cancel after commit respects transaction result without compensation
+PASS confirmed import remains visible when its replacement fails before commit
+PASS confirmed removal remains visible when its replacement fails before commit
+PASS late completion of an older committed write cannot replace a newer confirmed write
+PASS storage failure preserves old player and storyboard duration
+PASS first import retains temporary playback when device storage is unavailable
+PASS temporary audio can be replaced repeatedly while storage writes keep failing
+PASS temporary audio can be removed when storage deletion fails
+PASS cancelling replacement of temporary audio preserves its original URL and duration
+PASS a failed late removal cannot clear a newer temporary replacement
+PASS removing a temporary track cancels its pending replacement without resurrection
+PASS successful storage recovery makes the replacement durable and preserves it on later failure
+PASS memory-only replacement and removal work when both reads and writes are unavailable
+PASS a delayed durable receipt prevents failed replacement from treating its row as temporary, readable=true
+PASS a delayed durable receipt prevents failed removal from treating its row as temporary, readable=true
+PASS a delayed durable receipt prevents failed replacement from treating its row as temporary, readable=false
+PASS a delayed durable receipt prevents failed removal from treating its row as temporary, readable=false
+PASS failed remove keeps existing audio
+PASS chat change keeps result in origin and cannot patch destination duration
+PASS late storage restore cannot replace newly imported audio
+PASS mvMedia optional guard cancels before write and leaves default calls working
+Audio healthcheck: 26/26 passed

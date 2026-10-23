@@ -1,0 +1,34 @@
+心迹回廊 1.0.60 / build 1.0.60-r1
+基线：本地已验证 1.0.59-r1，提交 b69e7a71734fa6b2b93b84ae043b4ae4f9f3b7f7。
+
+本轮修复
+1. 共用世界书的表情包分别归属角色。更新、撤掉只作用于本人可确认归属的条目；相同世界书的读改写在本页共享队列中串行；新条目使用宿主已有角色过滤。
+2. 未持久保存的本页临时音源在存储不可用时仍能更换、移除。已保存歌曲仍在失败时保留；前序存储回执未确定时先保旧并允许重试，无新增等待。
+3. 同一修复链路中的保护：读取世界书失败不覆盖为空书；新建书的迟到回执不覆盖后来的主书选择；角色和书的原目标身份不变。
+
+保留内容
+不改生成提示词、模型请求、额度、档案结构、既有图片、原包、上一版或 GitHub。
+旧表情包条目归属不明时保留原文并提示检查；不能从已经被旧版覆盖的世界书中凭空恢复丢失的旧条目，角色卡仍保存的表情包可明确重新写入。
+
+验证
+现有完整回归入口：115/115通过。音源文件包含26个独立行为用例，贴图23项。
+全部414个JS/MJS语法通过。363模块依赖连接与完整bundle初始化通过。
+runtime连续两次从源码重建字节一致；manifest/index/版本查询串一致。
+具体日志和独立复核见 verification/1.0.60/。
+这套验证是当前包随附的体检测试，不声称恢复或执行了历史遗失的旧测试套件。
+
+运行bundle SHA-256：938c438f8775bb2db3f0fa948837dd7f557f035074d7c4e3817926fbcfd6fb45
+源模块集合 SHA-256：b3a1374bd26b64835bb120a3899c77a6b638ff03231f1c678365fa633567bfef
+
+未执行：真实 SillyTavern、TT、iPhone、Chromium/原生IndexedDB、真实网络/模型/生图/音乐接口验收。
+Codex Security 专用工具与预检资源当前不可用；执行独立人工差异复核及模拟边界测试，不冒称专用安全扫描通过。
+GitHub无写入；未commit、push、发布或删除旧版。
+
+安装包：hearttrace-upload.zip，单根tokimemo-main/；ZIP SHA-256由交付消息提供。
+
+宿主公开数据合同核对：
+https://github.com/SillyTavern/SillyTavern/blob/release/public/scripts/world-info.js
+已读取blob 1941041a7d3d520bc2239117e3853cd0058feac8；确认avatar去扩展名用于characterFilter及loadWorldInfo非2xx返回null。
+https://docs.sillytavern.app/usage/core-concepts/worldinfo/
+
+首次新增贴图6个负例在基线失败，修复后通过；音源临时更换以及迟到存储组合均取得先失败后通过的证据。

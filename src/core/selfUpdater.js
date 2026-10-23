@@ -1,9 +1,10 @@
 import { RELEASE_README } from './releaseNotes.js';
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-export const INSTALLED_BUILD = '1.0.52';
+export const INSTALLED_BUILD = '1.0.59-r1';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
-function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
+const localUpdateErrors = new WeakSet();
+function updateError(message) { const error = new Error(message); error.userMessage = message; localUpdateErrors.add(error); return error; }
 
 function installation(moduleUrl, origin) {
     const url = new URL(moduleUrl);
@@ -48,7 +49,7 @@ export async function updateSelf({ moduleUrl = import.meta.url, origin = globalT
                     : `宿主更新接口返回 HTTP ${response.status}；请检查 Git、网络及服务器日志。`);
                 return await response.json();
             } catch (error) {
-                if (error?.userMessage) throw error;
+                if (localUpdateErrors.has(error)) throw error;
                 throw updateError(controller.signal.aborted ? '请求超时，服务器可能仍在更新；请稍后检查版本，不要连续重试。' : '更新请求未完成；请检查网络或宿主支持情况。');
             } finally { clearTimeout(timer); }
         };
@@ -69,7 +70,7 @@ export async function updateSelf({ moduleUrl = import.meta.url, origin = globalT
             if (!isProjectRemote(verified?.remoteUrl) || !String(verified?.currentCommitHash || '').startsWith(result.shortCommitHash) || verified.isUpToDate !== true) throw updateError('服务器返回的更新结果尚未确认，请在扩展管理中检查；不要重复点击更新。');
             return { message: `已更新${branch} · 提交 ${result.shortCommitHash}。当前页面仍运行 ${installedVersion()}，保存聊天后刷新以加载新版。` };
         } catch (error) {
-            if (error?.userMessage) throw error;
+            if (localUpdateErrors.has(error)) throw error;
             throw updateError('更新结果尚未确认，请在扩展管理中检查。');
         }
     })();
@@ -323,7 +324,7 @@ export async function checkHearttraceUpdate({ force = false, moduleUrl = import.
             });
             return hearttraceUpdateSnapshot();
         } catch (error) {
-            if (sequence === checkSequence) publishUpdate({ status: 'unknown', message: String(error?.userMessage || error?.message || '没能完成检测，请稍后再试。') });
+            if (sequence === checkSequence) publishUpdate({ status: 'unknown', message: localUpdateErrors.has(error) ? error.userMessage : '没能完成检测，请稍后再试。' });
             return hearttraceUpdateSnapshot();
         } finally {
             checkingPromise = null;
@@ -340,8 +341,12 @@ function resolveHostFn(name) {
 }
 
 function looksLikeGitPullBlocked(error, status = 0, detail = '') {
-    const text = `${detail} ${error instanceof Error ? error.message : String(error || '')}`;
-    return status === 500 || error?.status === 500 || /not valid JSON|Unexpected token|Internal Server Error|HTTP 500/i.test(text);
+    const httpStatus = Number(status || error?.status) || 0;
+    if (httpStatus && ![400, 409, 500].includes(httpStatus)) return false;
+    const text = `${detail} ${error?.message || String(error || '')}`;
+    // Only Git's explicit local-file refusal justifies the existing main-only
+    // overwrite fallback. Transport, authentication and JSON errors do not.
+    return /(?:your local changes|the following untracked working tree files)[\s\S]{0,4000}would be overwritten by (?:merge|checkout)/i.test(text);
 }
 
 function reloadTavernPage(delayMs = 800) {
@@ -369,16 +374,16 @@ async function overwriteFromGithub(folder) {
     const reinstallFn = resolveHostFn('reinstallExtension');
     if (!reinstallFn) throw updateError('更新失败：本地扩展目录有改动，酒馆无法 git pull。当前环境没有 GitHub 覆盖安装。');
     globalThis.toastr?.info?.('git pull 被本地改动挡住了，改为用 GitHub 版本覆盖…', '心迹回廊');
-    const response = await reinstallFn(folder);
+    let response;
+    try { response = await reinstallFn(folder); }
+    catch { throw updateError('GitHub 覆盖失败，请检查宿主与网络后重试。'); }
     if (response?.ok === true) {
         globalThis.toastr?.success?.('已强制覆盖为 GitHub 版本，正在刷新页面…', '心迹回廊');
         reloadTavernPage();
         return { ok: true, overwritten: true };
     }
     const status = typeof response?.status === 'number' ? response.status : 0;
-    let detail = '';
-    try { if (typeof response?.text === 'function') detail = (await response.text()).trim(); } catch {}
-    throw updateError(detail || (status ? `GitHub 覆盖失败 (HTTP ${status})` : 'GitHub 覆盖失败'));
+    throw updateError(status ? `GitHub 覆盖失败 (HTTP ${status})` : 'GitHub 覆盖失败，请检查宿主与网络。');
 }
 
 export async function applyHearttraceUpdateAndReload(options = {}) {
@@ -403,10 +408,12 @@ export async function applyHearttraceUpdateAndReload(options = {}) {
             let detail = '';
             try { if (typeof response?.text === 'function') detail = (await response.text()).trim(); } catch {}
             if (looksLikeGitPullBlocked(null, status, detail)) return afterPullBlocked(branch, folder);
-            throw updateError(detail || `宿主更新接口返回 HTTP ${status || '?'}`);
+            const failure = updateError(`宿主更新接口返回 HTTP ${status || '?'}，请检查宿主与网络后重试。`);
+            failure.status = status;
+            throw failure;
         } catch (error) {
             if (looksLikeGitPullBlocked(error, error?.status, error?.detail)) return afterPullBlocked(branch, folder);
-            throw error?.userMessage ? error : updateError(error?.message || '更新未完成，请检查宿主与网络。');
+            throw localUpdateErrors.has(error) ? error : updateError('更新未完成，请检查宿主与网络后重试。');
         }
     }
     try {

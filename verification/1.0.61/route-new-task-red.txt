@@ -1,0 +1,45 @@
+✔ a normal archive increment preserves the chosen person instead of selecting the whole roster (3.724607ms)
+✔ upgrade restores the latest saved V1 choice within this archive lifetime (1.190842ms)
+✔ exact revision legacy settings remain readable when old timestamps are unavailable (0.394734ms)
+✔ an explicit newer default is not replaced with an older specified preference (0.392551ms)
+✔ choice isolation includes route, character, chat and a recreated archive (1.18286ms)
+✔ the production archive timestamp keeps same-archive rebuild preferences and isolates deletion followed by creation (0.772724ms)
+✔ migration excludes future, foreign and ambiguous revision records (0.630407ms)
+✔ a storage write failure keeps the new in-session choice ahead of an older disk value (0.470304ms)
+✔ removing a selected person asks for correction instead of silently expanding to everybody (0.93515ms)
+✔ random and ensemble choices retain their existing semantics and frozen snapshots remain unchanged (0.539225ms)
+✔ a restored choice stays usable for the session if migration cannot be saved (0.823748ms)
+✔ a successful newer choice from another tab is visible to an already-open page (0.578171ms)
+✔ unavailable browser storage reports an unsaved choice without breaking capture (0.527176ms)
+✖ explicit new work uses the page choice even while an older recovery is retained (2.70246ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 13
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 108.904579
+
+✖ failing tests:
+
+test at tests/healthcheck-route-people.mjs:159:1
+✖ explicit new work uses the page choice even while an older recovery is retained (2.70246ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + undefined
+  - [
+  -   'p1'
+  - ]
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-route-people.mjs:176:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: [ 'p1' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

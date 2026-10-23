@@ -77,7 +77,10 @@ export function normalizeStickerData(value) {
     const chibiFilter = ['auto', 'off'].includes(value?.settings?.chibiFilter) ? value.settings.chibiFilter : '';
     return { version: 1, revision: Math.max(0, Number(value?.revision) || 0), packs,
         settings: { maxOne: value?.settings?.maxOne !== false, ...(chibiFilter ? { chibiFilter } : {}) },
-        lore: { book: text(value?.lore?.book).slice(0, 200), hash: text(value?.lore?.hash).slice(0, 40) } };
+        lore: { book: text(value?.lore?.book).slice(0, 200), hash: text(value?.lore?.hash).slice(0, 40),
+            ...(value?.lore?.unconfirmed === true ? { unconfirmed: true, submittedHash: text(value?.lore?.submittedHash).slice(0, 40) } : {}),
+            ...(value?.lore?.removed === true ? { removed: true } : {}),
+            ...(value?.lore?.legacyPreserved === true ? { legacyPreserved: true } : {}) } };
 }
 
 function characterOf(context) {
@@ -91,7 +94,77 @@ export function stickerScope(context = rawContext()) {
     return card ? text(card.avatar || card.data?.avatar) || text(context.name2) : '';
 }
 export function readStickerData(context = rawContext()) {
-    return normalizeStickerData(characterOf(context)?.data?.extensions?.[STICKER_FIELD]);
+    return normalizeStickerData(readStickerField(STICKER_FIELD, context));
+}
+
+// A legacy host can mutate its card optimistically even when HTTP persistence
+// fails. Keep only this plugin's last confirmed fields visible until a fresh
+// card object or a confirmed retry supplies an authoritative value.
+const UNCONFIRMED_FIELDS = Symbol.for('Hearttrace.stickerUnconfirmedFields.v1');
+function unconfirmedFields() { return globalThis[UNCONFIRMED_FIELDS] || (globalThis[UNCONFIRMED_FIELDS] = new Map()); }
+function fieldKey(context, field) { return JSON.stringify([stickerScope(context), field]); }
+export function readStickerField(field, context = rawContext()) {
+    const card = characterOf(context), key = fieldKey(context, field), pending = unconfirmedFields().get(key);
+    if (pending?.card === card) return pending.value;
+    if (pending) unconfirmedFields().delete(key);
+    return card?.data?.extensions?.[field];
+}
+function sameField(a, b) {
+    if (a === b) return true;
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false;
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every(key => Object.hasOwn(b, key) && sameField(a[key], b[key]));
+}
+function saveError(unconfirmed = false, field = STICKER_FIELD) {
+    const message = field === 'world'
+        ? unconfirmed ? '世界书关联已提交，但未能确认。请刷新酒馆后检查主世界书选择。' : '未能保存世界书关联，请检查主世界书选择后重试。'
+        : unconfirmed ? '已提交，但未能确认保存。仍显示上次确认的表情内容，请稍后重试。' : '表情内容未能保存，原内容已保留，请稍后重试。';
+    return Object.assign(new Error(message), { code: unconfirmed ? 'RMT_STICKER_SAVE_UNCONFIRMED' : 'RMT_STICKER_SAVE', safeToDisplay: true, safeUserMessage: message });
+}
+export async function writeConfirmedStickerField(field, value, context = rawContext()) {
+    if (![STICKER_FIELD, 'world'].includes(field)) throw saveError();
+    const card = characterOf(context), avatar = text(card?.avatar || card?.data?.avatar), id = context?.characterId;
+    if (!card || !avatar) throw changedTarget();
+    const key = fieldKey(context, field), previous = structuredClone(readStickerField(field, context));
+    const bound = () => context.characterId === id && stickerScope(context) === avatar;
+    const bulk = typeof context.writeExtensionFieldBulk === 'function';
+    if (bulk) {
+        let result;
+        try { result = await context.writeExtensionFieldBulk([avatar], field, value); } catch { throw saveError(false, field); }
+        if (!bound()) throw changedTarget();
+        if (!Array.isArray(result?.updated) || result.updated.length !== 1 || result.updated[0] !== avatar
+            || !Array.isArray(result.failed) || result.failed.length
+            || !Array.isArray(result.skipped) || result.skipped.length) throw saveError(false, field);
+    } else {
+        if (typeof context.writeExtensionField !== 'function') throw saveError(false, field);
+        try { await context.writeExtensionField(id, field, value); } catch { /* A fresh read can still confirm a committed request. */ }
+        if (!bound()) throw changedTarget();
+    }
+    // World selection can be changed by the user outside this plugin's queue.
+    // Even a successful bulk response may arrive after a newer selection and
+    // overwrite the host's local field. Reload through the public API before
+    // confirming the binding, and leave that authoritative object untouched.
+    if (!bulk || field === 'world') {
+        const optimistic = characterOf(context);
+        try { await context.getOneCharacter?.(avatar); } catch { /* Keep the confirmed plugin value below. */ }
+        if (!bound()) throw changedTarget();
+        const refreshed = characterOf(context);
+        if (refreshed === optimistic) {
+            unconfirmedFields().set(key, { card: refreshed, value: previous });
+            throw saveError(true, field);
+        }
+        unconfirmedFields().delete(key);
+        if (!sameField(refreshed?.data?.extensions?.[field], value)) {
+            if (field === 'world') throw changedTarget();
+            throw saveError();
+        }
+        if (field === 'world') return value;
+    }
+    unconfirmedFields().delete(key);
+    const latest = characterOf(context);
+    latest.data = latest.data || {}; latest.data.extensions = latest.data.extensions || {};
+    latest.data.extensions[field] = value;
+    return value;
 }
 
 export function ownerLabel(owner, context = rawContext()) {
@@ -147,17 +220,47 @@ export function setStickerFloat(on, context = rawContext()) {
 function emit(type) {
     try { globalThis.dispatchEvent?.(new CustomEvent(type)); } catch { /* No DOM events in tests. */ }
 }
-export async function writeStickerData(value, context = rawContext()) {
+const STICKER_WRITES = Symbol.for('Hearttrace.stickerWrites.v1');
+function writeQueues() {
+    // Chat bootstrap and full runtime can import separate copies of this file.
+    return globalThis[STICKER_WRITES] || (globalThis[STICKER_WRITES] = new Map());
+}
+function changedTarget() {
+    return Object.assign(new Error('角色或表情已变化，这次修改没有覆盖现有内容。'), { code: 'RMT_STICKER_CHANGED', safeToDisplay: true, safeUserMessage: '角色或表情已变化，这次修改没有覆盖现有内容。' });
+}
+
+// Queue changes, not precomputed snapshots. Each change sees the last confirmed
+// card write, including changes made while this operation was waiting.
+export function updateStickerData(mutate, context = rawContext(), { isCurrent = null } = {}) {
     const card = characterOf(context);
-    if (!card || typeof context.writeExtensionField !== 'function') throw new Error('请先打开一个单人角色聊天，再保存表情包。');
-    const previous = readStickerData(context);
-    const data = normalizeStickerData({ ...value, revision: Math.max(Date.now(), previous.revision + 1) });
-    await context.writeExtensionField(context.characterId, STICKER_FIELD, data);
-    // Keep the in-memory card current even on hosts that only persist remotely.
-    card.data = card.data || {}; card.data.extensions = card.data.extensions || {};
-    card.data.extensions[STICKER_FIELD] = data;
-    emit(STICKER_EVENTS.changed);
-    return data;
+    if (!card || typeof context.writeExtensionField !== 'function' && typeof context.writeExtensionFieldBulk !== 'function') return Promise.reject(new Error('请先打开一个单人角色聊天，再保存表情包。'));
+    const scope = stickerScope(context), id = context.characterId, queues = writeQueues();
+    // Hosts may refresh the card object after writing; stable character identity
+    // matters, not whether the object instance is the same one we first read.
+    const bound = () => !!characterOf(context) && context.characterId === id && stickerScope(context) === scope;
+    const pending = (queues.get(scope) || Promise.resolve()).catch(() => {}).then(async () => {
+        if (!bound() || (isCurrent && !isCurrent())) throw changedTarget();
+        const previous = readStickerData(context), value = mutate(previous);
+        if (value == null) return null; // Deleted targets are never recreated by late edits.
+        const data = normalizeStickerData({ ...value, revision: Math.max(Date.now(), previous.revision + 1) });
+        if (!bound() || (isCurrent && !isCurrent())) throw changedTarget();
+        await writeConfirmedStickerField(STICKER_FIELD, data, context);
+        if (!bound()) throw changedTarget();
+        // A newer queued edit may now be waiting. Publish this confirmed state
+        // before it reads, even if its own UI has since been closed.
+        const latestCard = characterOf(context);
+        latestCard.data = latestCard.data || {}; latestCard.data.extensions = latestCard.data.extensions || {};
+        latestCard.data.extensions[STICKER_FIELD] = data;
+        emit(STICKER_EVENTS.changed);
+        return data;
+    });
+    queues.set(scope, pending);
+    pending.finally(() => { if (queues.get(scope) === pending) queues.delete(scope); }).catch(() => {});
+    return pending;
+}
+
+export function writeStickerData(value, context = rawContext()) {
+    return updateStickerData(() => value, context);
 }
 
 // One constant entry in the character's lorebook: what each sticker means,

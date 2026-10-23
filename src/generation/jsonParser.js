@@ -419,6 +419,35 @@ function parseRepairedObject(text) {
     } catch { return null; }
 }
 
+// Pick the answer before attempting to repair it. A complete example earlier in
+// the reply must not replace a later answer just because that answer is cut off
+// or has a repairable comma. Fences are scanned independently so prose braces
+// cannot swallow their JSON. A lone prose brace is not a new object candidate.
+function finalJsonResponseCandidate(text) {
+    const choices = [];
+    const collect = (body, offset) => {
+        const { candidates, unclosedObject } = extractBalancedJsonObjects(body);
+        let cursor = 0;
+        for (const candidate of [...candidates, ...(unclosedObject ? [unclosedObject] : [])]) {
+            const index = body.indexOf(candidate, cursor);
+            if (index < 0) continue;
+            cursor = index + candidate.length;
+            const recognizable = repairJsonCandidate(candidate) || candidate;
+            // Invalid quote/key styles still identify a later attempted object.
+            // Select it for an error instead of silently accepting an earlier
+            // example; an unstructured prose brace remains outside this rule.
+            if (!/^\{\s*(?:["“”]|\}|(?:'(?:\\.|[^'\\\r\n])*'|[\p{L}\p{N}_$][\p{L}\p{N}_$-]*)\s*:)/u.test(recognizable)) continue;
+            choices.push({ text: candidate, position: offset + index });
+        }
+    };
+    collect(text, 0);
+    for (const fence of text.matchAll(/(?:^|\n)[ \t]*```(?:json)?[ \t]*\r?\n([\s\S]*?)(?:\r?\n[ \t]*```[ \t]*(?=\r?\n|$)|$)/gi)) {
+        collect(fence[1], fence.index + fence[0].indexOf(fence[1]));
+    }
+    choices.sort((left, right) => right.position - left.position);
+    return choices[0]?.text || '';
+}
+
 // A reply whose final } balances its first { when string state is ignored has
 // most likely ended; an unescaped quote inside a string only makes the
 // string-aware scan look unclosed. Real cut-offs still have unclosed brackets.
@@ -509,6 +538,11 @@ export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configu
         if (salvaged) return salvaged;
         // Do not fall back to an earlier example when the answer has started.
         text = inboxCandidate;
+    }
+    // Mail keeps its existing optional-art salvage path. Other modes must work
+    // only with the last actual answer, including when it is still incomplete.
+    if (!inboxCandidate && mergedInboxIllustrations !== true) {
+        text = finalJsonResponseCandidate(text) || text;
     }
     const fences = [...text.matchAll(/(?:^|\n)[ \t]*```json[ \t]*\n([\s\S]*?)\n[ \t]*```[ \t]*(?=\n|$)/gi)];
     for (let i = fences.length - 1; i >= 0; i -= 1) {

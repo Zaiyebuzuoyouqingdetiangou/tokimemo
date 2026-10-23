@@ -1,0 +1,49 @@
+(node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ two UI field edits merge with the latest confirmed card instead of overwriting each other (14.256798ms)
+✔ failed card save keeps the previous state and does not poison the next queued edit (7.731105ms)
+✔ asynchronous image/caption edits are latest-wins and cannot recreate deleted stickers (6.451423ms)
+✔ switching characters during an image edit cannot modify a copied sticker id in the new character (5.723078ms)
+✔ late lorebook receipt updates only lore metadata, preserving newer card edits (10.295915ms)
+✔ lorebook failure keeps saved card content and allows a later synchronization (9.25048ms)
+✔ bootstrap and runtime copies share the same per-character write queue (6.747431ms)
+✔ a host refreshing the same character object does not break queued saves (9.335345ms)
+✔ two characters sharing one book retain separate rules and removal touches only the owner (9.016494ms)
+✔ shared book read-modify-write operations serialize across different characters (9.037005ms)
+✔ ambiguous legacy entries and unrelated rows are preserved on write and removal (7.935227ms)
+✔ unambiguous unchanged legacy entry migrates in place and preserves user settings (10.337306ms)
+✔ legacy entry filtered to another character is never adopted or removed (7.608474ms)
+✔ book replacement while a write waits does not redirect the operation (6.799228ms)
+✔ late newly-created book binding receipt cannot overwrite a newer user selection (12.588297ms)
+✔ unreadable bound book (null) cannot be overwritten or removed (6.109688ms)
+✔ unreadable bound book ({}) cannot be overwritten or removed (5.785609ms)
+✔ unreadable bound book ({"entries":[]}) cannot be overwritten or removed (5.888311ms)
+✔ new books use independent names whether an old human-readable name is listed or omitted (12.14664ms)
+✔ unchanged old lore receipts do not trigger new startup migration reads (5.467559ms)
+✔ bootstrap and runtime lore copies share the same book queue (11.880126ms)
+✔ two same-named cards without books create separate destinations without lost entries (7.063538ms)
+✔ missing refresh API still allows a new independent destination without touching a same-named book (6.227964ms)
+(node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ character writes use the single-avatar public bulk receipt and retain other fields (6.842972ms)
+✔ a real host HTTP 500 bulk receipt does not become a successful card save (3.205237ms)
+✔ legacy host writes confirm through a fresh character reload (4.625595ms)
+✔ legacy optimistic mutation is not accepted when its server save fails (2.944291ms)
+✔ an unavailable legacy readback leaves last confirmed plugin data visible (3.142524ms)
+✔ failed book reads and stale names cannot overwrite the old same-named book (4.895414ms)
+✔ unacknowledged book saves never create a confirmed hash and do not loop on startup (5.499958ms)
+✔ unacknowledged removals remain retryable and do not recreate rules on edits (5.786171ms)
+✔ malformed, skipped, failed and foreign bulk receipts are rejected without legacy fallback (16.486372ms)
+✔ a later fresh host read releases an uncertain plugin snapshot without rewriting the card (3.270272ms)
+✔ bootstrap and runtime share the last confirmed value after a legacy read failure (3.849728ms)
+✔ a known collision in a newly generated worldbook name is never modified (2.895889ms)
+✔ a confirmed retry after a legacy failure starts from the last confirmed content (3.297964ms)
+✔ after restart a failed new-book save cannot turn its persisted binding into an empty replacement (6.204719ms)
+ℹ tests 37
+ℹ suites 0
+ℹ pass 37
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 276.624158

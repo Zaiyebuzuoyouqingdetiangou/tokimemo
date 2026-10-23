@@ -1,0 +1,40 @@
+(node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✖ late official bulk callbacks cannot replace a newer persisted worldbook selection or unbinding (9.748201ms)
+✖ a bulk worldbook binding with unavailable readback remains explicitly unconfirmed (6.596752ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 96.076967
+
+✖ failing tests:
+
+test at tests/healthcheck-sticker-persistence.mjs:194:1
+✖ late official bulk callbacks cannot replace a newer persisted worldbook selection or unbinding (9.748201ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-sticker-persistence.mjs:211:20)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-sticker-persistence.mjs:219:1
+✖ a bulk worldbook binding with unavailable readback remains explicitly unconfirmed (6.596752ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.61/tests/healthcheck-sticker-persistence.mjs:223:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    operator: 'rejects',
+    diff: 'simple'
+  }

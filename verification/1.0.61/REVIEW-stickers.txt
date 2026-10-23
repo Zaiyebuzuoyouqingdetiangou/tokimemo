@@ -1,0 +1,87 @@
+Independent sticker persistence review — 1.0.61
+Reviewer: /root/audit_adjacent_160
+Candidate: /workspace/scratch/6ca743277155/tokimemo-fix-1.0.61
+Scope: stickerStore.js, stickerLore.js, stickersView.js, two focused healthchecks and public-host fixture. Read-only source/test review; scratch reproduction only.
+
+Disposition: the confirmed late bulk world-binding blocker is fixed. No remaining verified blocker within this reviewed scope.
+
+Source verification:
+- stickerStore.js:143–161: after a valid bulk world-field acknowledgement, the public getOneCharacter API must return a fresh character object. A different world value rejects with RMT_STICKER_CHANGED and preserves that authoritative object; missing/failed readback rejects with RMT_STICKER_SAVE_UNCONFIRMED. The world branch returns before generic assignment.
+- stickerLore.js:168–178: validates exact current primary binding and no longer assigns world manually. Rejection happens before recording a stale lore receipt.
+- Earlier verified protections remain: unique new-book destinations; failed existing-book reads stop; worldbook writes stay explicitly unconfirmed; public card receipt checks; legacy last-confirmed field overlay; per-card/per-book queues; owned-entry isolation; deletion/cancellation guards.
+
+Independent real-host reproduction:
+Command: node --experimental-vm-modules /workspace/scratch/6ca743277155/sticker-bulk-late-repro.mjs
+Uses exact public host fixture functions, delaying the world bulk fetch response after server persistence. While delayed, simulates a newer persisted selection and then separately an explicit unbinding. Both reject with RMT_STICKER_CHANGED. Memory and server retain the newer value, lore.book remains empty, no receipt write is issued, and the submitted standalone worldbook remains recoverable.
+{"outcome":"PASS","selected":"newer-user-selected-book","visibleWorld":"newer-user-selected-book","durableWorld":"newer-user-selected-book","loreBook":""}
+(node:2) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"outcome":"PASS","selected":"","visibleWorld":"","durableWorld":"","loreBook":""}
+
+
+Focused tests:
+Command: node --experimental-vm-modules --test tests/healthcheck-extras-stickers.mjs tests/healthcheck-sticker-persistence.mjs
+Result: 39 passed; 0 failed, cancelled, skipped or todo.
+(node:11) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ two UI field edits merge with the latest confirmed card instead of overwriting each other (18.66928ms)
+✔ failed card save keeps the previous state and does not poison the next queued edit (10.056299ms)
+✔ asynchronous image/caption edits are latest-wins and cannot recreate deleted stickers (8.691977ms)
+✔ switching characters during an image edit cannot modify a copied sticker id in the new character (7.701497ms)
+✔ late lorebook receipt updates only lore metadata, preserving newer card edits (13.957262ms)
+✔ lorebook failure keeps saved card content and allows a later synchronization (11.600857ms)
+✔ bootstrap and runtime copies share the same per-character write queue (9.149081ms)
+✔ a host refreshing the same character object does not break queued saves (5.897547ms)
+✔ two characters sharing one book retain separate rules and removal touches only the owner (7.659785ms)
+✔ shared book read-modify-write operations serialize across different characters (7.236971ms)
+✔ ambiguous legacy entries and unrelated rows are preserved on write and removal (6.82911ms)
+✔ unambiguous unchanged legacy entry migrates in place and preserves user settings (6.789853ms)
+✔ legacy entry filtered to another character is never adopted or removed (7.702538ms)
+✔ book replacement while a write waits does not redirect the operation (5.311693ms)
+✔ late newly-created book binding receipt cannot overwrite a newer user selection (12.003551ms)
+✔ unreadable bound book (null) cannot be overwritten or removed (5.29608ms)
+✔ unreadable bound book ({}) cannot be overwritten or removed (4.897862ms)
+✔ unreadable bound book ({"entries":[]}) cannot be overwritten or removed (4.949949ms)
+✔ new books use independent names whether an old human-readable name is listed or omitted (11.077215ms)
+✔ unchanged old lore receipts do not trigger new startup migration reads (5.177605ms)
+✔ bootstrap and runtime lore copies share the same book queue (10.605269ms)
+✔ two same-named cards without books create separate destinations without lost entries (6.819987ms)
+✔ missing refresh API still allows a new independent destination without touching a same-named book (6.220924ms)
+(node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ character writes use the single-avatar public bulk receipt and retain other fields (7.888963ms)
+✔ a real host HTTP 500 bulk receipt does not become a successful card save (4.105354ms)
+✔ legacy host writes confirm through a fresh character reload (5.532008ms)
+✔ legacy optimistic mutation is not accepted when its server save fails (3.972437ms)
+✔ an unavailable legacy readback leaves last confirmed plugin data visible (4.114036ms)
+✔ failed book reads and stale names cannot overwrite the old same-named book (6.981044ms)
+✔ unacknowledged book saves never create a confirmed hash and do not loop on startup (7.719343ms)
+✔ unacknowledged removals remain retryable and do not recreate rules on edits (7.233176ms)
+✔ malformed, skipped, failed and foreign bulk receipts are rejected without legacy fallback (19.669145ms)
+✔ a later fresh host read releases an uncertain plugin snapshot without rewriting the card (3.987029ms)
+✔ bootstrap and runtime share the last confirmed value after a legacy read failure (4.753029ms)
+✔ a known collision in a newly generated worldbook name is never modified (4.447243ms)
+✔ a confirmed retry after a legacy failure starts from the last confirmed content (3.235501ms)
+✔ after restart a failed new-book save cannot turn its persisted binding into an empty replacement (4.528999ms)
+✔ late official bulk callbacks cannot replace a newer persisted worldbook selection or unbinding (11.703878ms)
+✔ a bulk worldbook binding with unavailable readback remains explicitly unconfirmed (4.19123ms)
+ℹ tests 39
+ℹ suites 0
+ℹ pass 39
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 292.187391
+
+
+Limits: this validates the documented public-host source fixtures and production module chain; no live SillyTavern browser/network environment was used. Full build, syntax and full-suite verification belong to root.
+
+Reviewed hashes:
+6958bd15a8ff16bcd04738e3a7bdda877da42125a6366f5a0a63bd4dcd9a8976  src/core/stickerStore.js
+9164328ef15aba1076f336ac09ec0413bd46a946b38790b8b84ff11142001f12  src/core/stickerLore.js
+731e75f8d4042cd2d3ae8f53eb3e361d78c95353a8239e1abdedeb604694c838  src/ui/stickersView.js
+22f019a666b5d19367ec6f0d8eb3915bbf2a66d8b12e8ba60107319fceb7a489  tests/healthcheck-extras-stickers.mjs
+6d725a42148e26b7000d35702d72f097d8bf7ce5c661955249c5d41c2f41eb19  tests/healthcheck-sticker-persistence.mjs
+8aee272ec18e359d9ebe61cc409571f2c182cd2204ae7358edcf1591ff32b8d9  tests/fixtures/sticker-host-api.json
+

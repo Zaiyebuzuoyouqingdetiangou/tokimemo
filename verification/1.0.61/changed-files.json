@@ -1,0 +1,102 @@
+[
+  {
+    "path": "README.md",
+    "change": "modified"
+  },
+  {
+    "path": "dist/heartbeatMemories.bundle.js",
+    "change": "modified"
+  },
+  {
+    "path": "index.js",
+    "change": "modified"
+  },
+  {
+    "path": "manifest.json",
+    "change": "modified"
+  },
+  {
+    "path": "src/autoMemory/moduleHost.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/core/releaseNotes.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/core/routeParticipants.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/core/stickerLore.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/core/stickerStore.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/extras/mv.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/extras/mvMedia.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/generation/achievementCapture.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/generation/generationModes.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/generation/generationRequest.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/ui/mvView.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/ui/routeParticipants.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/ui/songPlayer.js",
+    "change": "modified"
+  },
+  {
+    "path": "src/ui/stickersView.js",
+    "change": "modified"
+  },
+  {
+    "path": "tests/fixtures/sticker-host-api.json",
+    "change": "added"
+  },
+  {
+    "path": "tests/healthcheck-auto-memory-capture.mjs",
+    "change": "added"
+  },
+  {
+    "path": "tests/healthcheck-extras-audio.mjs",
+    "change": "modified"
+  },
+  {
+    "path": "tests/healthcheck-extras-mv-audio.mjs",
+    "change": "added"
+  },
+  {
+    "path": "tests/healthcheck-extras-stickers.mjs",
+    "change": "modified"
+  },
+  {
+    "path": "tests/healthcheck-route-people.mjs",
+    "change": "added"
+  },
+  {
+    "path": "tests/healthcheck-sticker-persistence.mjs",
+    "change": "added"
+  }
+]

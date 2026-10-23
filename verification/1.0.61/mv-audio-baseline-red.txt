@@ -1,0 +1,33 @@
+(node:7) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL temporary song audio is usable in MV without a disk row expected boundary was reached
+FAIL MV temporary import can be removed while device storage is unavailable Expected values to be strictly equal:
+
+true !== false
+
+FAIL MV removal invalidates song page audio before returning and releasing Expected values to be strictly equal:
++ actual - expected
+
++ {
++   artist: '',
++   coverUrl: '',
++   name: 'original',
++   sourceUrl: '',
++   streaming: true,
++   url: 'https://audio.example/original.mp3'
++ }
+- null
+
+FAIL MV replacement appears on the song page when returning Expected values to be strictly equal:
++ actual - expected
+
++ 'original'
+- 'replacement.wav'
+
+FAIL failed MV replacement keeps durable audio and its duration Expected values to be strictly equal:
++ actual - expected
+
++ 'failed.wav'
+- 'original'
+
+MV audio integration: 0/5 passed
