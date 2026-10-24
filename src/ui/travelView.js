@@ -460,7 +460,7 @@ function travelKeepsakeHtml(item, session) {
     </section>`;
 }
 
-// 多人卡：说话人以生成时写明的 speaker 为准；旧站只按引用的档案记忆认一人。
+// 多人卡：说话人只认生成时写明的 speaker；旧站没有就写「他」，引用的记忆里有谁也不代表是他在说。
 // 地名、简介和对白里提到的人不是说话人（「越前家」「老头子」都不代表他在说话）。
 export function travelSpeakerLabel(item, lines = []) {
     const snapshot = runtimeState.activeArchiveSnapshot;
@@ -477,12 +477,6 @@ export function travelSpeakerLabel(item, lines = []) {
         const hit = cast.filter(person => key(person.name) === spoken || people.normalizeAliases(Array.isArray(person.aliases) ? person.aliases : [], person.name).some(alias => key(alias) === spoken));
         if (hit.length === 1) return people.plainPersonName(hit[0].name);
     }
-    try {
-        const ids = Array.isArray(item?.sourceMemoryIds) ? item.sourceMemoryIds : [];
-        const memories = (Array.isArray(memory?.memories) ? memory.memories : []).filter(row => ids.includes(row?.id));
-        const found = memories.length ? route_people.archiveCastIds(roster, { memories }) : [];
-        if (found.length === 1) return people.plainPersonName(cast.find(person => person.id === found[0])?.name || '') || '他';
-    } catch { /* 认不出时不猜。 */ }
     return '他';
 }
 
