@@ -37,6 +37,26 @@ function sourceRef(raw) {
     return ref;
 }
 
+// 化名、外号、伪装身份。是同一个人，不是另一个人物；没有时不写这个字段，旧名单不变。
+export function normalizeAliases(values, name = '') {
+    const own = String(name || '').trim();
+    const seen = new Set();
+    const out = [];
+    for (const value of Array.isArray(values) ? values : []) {
+        if (typeof value !== 'string') continue;
+        const alias = value.replace(/\s+/g, ' ').trim().slice(0, 40);
+        if (!alias || alias === own || seen.has(alias)) continue;
+        seen.add(alias); out.push(alias);
+        if (out.length >= 12) break;
+    }
+    return out;
+}
+function personAliases(person) {
+    if (person.aliases === undefined) return {};
+    const aliases = normalizeAliases(array(person.aliases, 'person.aliases'), person.name);
+    return aliases.length ? { aliases } : {};
+}
+
 function people(raw) {
     const ids = new Set();
     return array(raw, 'people').map(person => {
@@ -48,6 +68,7 @@ function people(raw) {
             id,
             name: string(person.name, 'person.name'),
             ...(person.identity === 'user' ? { identity: 'user' } : {}),
+            ...personAliases(person),
             sourceRefs: array(person.sourceRefs, 'person.sourceRefs').map(sourceRef),
         };
     });
@@ -109,6 +130,7 @@ export function participantIndexPayload(raw) {
         people: snapshot.people.map(person => ({
             id: person.id,
             name: person.name,
+            ...(person.aliases?.length ? { aliases: [...person.aliases] } : {}),
             identity: person.identity === 'user' ? 'user' : 'character',
             summary: person.sourceRefs.map(ref => ref.title).filter(Boolean).join('、').slice(0, 240),
             sourceKeys: person.sourceRefs.map(ref => ({ world: ref.world, uid: ref.uid, title: ref.title })),
@@ -119,13 +141,13 @@ export function participantIndexPayload(raw) {
 export function participantIndexPromptBlock(raw) {
     const payload = participantIndexPayload(raw);
     if (!payload) return '';
-    return `\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:\n${JSON.stringify(payload, null, 2)}\n\n以上是用户选定人物的索引。每人只有姓名、短标题和来源键；正文只在受控来源段出现一次，这里不是证据全文。不能把角色卡名称当作选定人物的姓名。保留其他已有历史，不因这份人物名单而删除或改写。\n`;
+    return `\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:\n${JSON.stringify(payload, null, 2)}\n\n以上是用户选定人物的索引。每人只有姓名、化名、短标题和来源键；正文只在受控来源段出现一次，这里不是证据全文。aliases 是同一个人的化名、外号或伪装身份，不是另一个人物：以化名出场时，在场不知情的人只知道化名，叙述里可以写明这是谁；不要把化名和真名写成两个人。不能把角色卡名称当作选定人物的姓名。保留其他已有历史，不因这份人物名单而删除或改写。\n`;
 }
 
 export function participantPromptBlock(raw) {
     const snapshot = normalizeParticipantSnapshot(raw);
     if (!snapshot) return '';
-    return `\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:\n${JSON.stringify(snapshot, null, 2)}\n\n以上是用户选定的人物设定，不是已经发生的事实。不能把角色卡名称当作选定人物的姓名。保留其他已有历史，不因这份人物名单而删除或改写。\n`;
+    return `\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:\n${JSON.stringify(snapshot, null, 2)}\n\n以上是用户选定的人物设定，不是已经发生的事实。aliases 是同一个人的化名、外号或伪装身份，不是另一个人物：以化名出场时，在场不知情的人只知道化名，叙述里可以写明这是谁；不要把化名和真名写成两个人。不能把角色卡名称当作选定人物的姓名。保留其他已有历史，不因这份人物名单而删除或改写。\n`;
 }
 
 function stringName(value, fallback = '') {
@@ -215,15 +237,26 @@ export function storyOwnerLabelAllowed(value, memoryBank = null) {
     return parts.every(part => names.has(part)) && new Set(parts).size === parts.length;
 }
 
+function aliasMap(memoryBank, people) {
+    const map = new Map();
+    const rows = Array.isArray(people) && people.some(person => person && typeof person === 'object') ? people : (() => {
+        try { return normalizeParticipantRoster(memoryBank?.[PARTICIPANTS_KEY])?.people || []; } catch { return []; }
+    })();
+    for (const person of rows) if (person?.name && Array.isArray(person.aliases) && person.aliases.length) map.set(person.name, person.aliases);
+    return map;
+}
+
 export function promptIdentityLines(context, people = null, memoryBank = null) {
     const story = resolveStoryIdentities(memoryBank, context, people);
     const names = Array.isArray(people)
         ? uniqueNames(people.map(person => typeof person === 'string' ? person : person?.name))
         : story.ownerNames;
+    const aliasOf = aliasMap(memoryBank, people);
+    const labelled = names.map(name => aliasOf.get(name)?.length ? `${name}（化名／外号：${aliasOf.get(name).join('、')}）` : name);
     const userLine = `当前用户：${story.userDisplay}${story.compatNote ? `\n${story.compatNote}` : ''}`;
     if (names.length) {
         return `角色卡名称：${story.cardName}。这是卡名，不是人物。
-选定人物：${names.join('、')}
+选定人物：${labelled.join('、')}${labelled.some((label, index) => label !== names[index]) ? '\n括号里是同一个人的化名或外号，不是另一个人。' : ''}
 ${userLine}`;
     }
     return `角色卡名称：${story.cardName}。卡名不是人物；人物姓名以档案记忆 participants、选定名单和资料里的真名为准。单人卡时，卡名往往就是那个人的真名。

@@ -140,6 +140,7 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
           <article class="rmt-participant-person" data-rmt-participant-person="${index}">
             <label class="rmt-participant-select"><input type="checkbox" data-rmt-participant-selected="${index}" ${selected(person.id) ? 'checked' : ''}> ${text.esc(selectionLabel)}</label>
             <label>人物名字<input type="text" data-rmt-participant-name="${index}" value="${text.esc(person.name)}"></label>
+            <label>化名／外号<input type="text" data-rmt-participant-aliases="${index}" value="${text.esc((person.aliases || []).join('、'))}" placeholder="没有可不填，多个用顿号分开"></label>
             <small>${person.sourceRefs.length ? person.sourceRefs.map(ref => `${text.esc(ref.world)} · ${text.esc(ref.title)} (#${text.esc(ref.uid)})`).join('<br>') : '手动补充，未关联世界书条目'}</small>
             ${person.sourceRefs.length ? `<button type="button" class="rmt-btn" data-rmt-participant-duplicate="${index}">这些条目里还有其他人物</button>` : ''}
           </article>`).join('') : '<p>尚未加入人物。展开世界书条目后勾选，或手动补充。</p>';
@@ -175,8 +176,15 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
             const existing = draft.people.find(person => people.plainPersonName(person.name) === plain);
             if (existing) {
                 for (const entry of refs) if (!existing.sourceRefs.some(ref => sourceKey(ref) === sourceKey(entry))) existing.sourceRefs.push(copySource(entry));
+                const aliases = people.normalizeAliases([...(existing.aliases || []), ...(row.aliases || [])], existing.name);
+                if (aliases.length) existing.aliases = aliases;
                 setSelected(existing.id, true); merged += 1;
-            } else { addPerson(row.name, refs); added += 1; }
+            } else {
+                const person = addPerson(row.name, refs);
+                const aliases = people.normalizeAliases(row.aliases || [], person.name);
+                if (aliases.length) person.aliases = aliases;
+                added += 1;
+            }
         }
         current.found = [];
         changed();
@@ -216,6 +224,14 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
     }
     function changed({ entries = true } = {}) { renderPeople(); if (entries) renderEntries(); status(current, ''); }
     current.element.addEventListener('input', event => {
+        const aliasIndex = event.target?.dataset?.rmtParticipantAliases;
+        if (aliasIndex !== undefined && !current.busy && current.isCurrent()) {
+            event.stopPropagation();
+            const person = draft.people[Number(aliasIndex)];
+            const aliases = people.normalizeAliases(event.target.value.split(/[、,，;；/]/), person.name);
+            if (aliases.length) person.aliases = aliases; else delete person.aliases;
+            return;
+        }
         const index = event.target?.dataset?.rmtParticipantName;
         if (index === undefined || current.busy || !current.isCurrent()) return;
         event.stopPropagation();

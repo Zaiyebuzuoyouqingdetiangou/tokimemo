@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 366
-// Source SHA-256: 496db8944f32dc391c8fb7a5ded7314f9c0a2302dbff8ee5f9a7af31267ed9f8
+// Source SHA-256: e2ac4ef57c17b1b490a15ca3aa8cf6846914fc5811a74f53cf690586a680107c
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1807,7 +1807,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.61\n\n## 本次修复\n\n- 「本页人物」不再因档案更新而重置为「沿用档案人物」。同一档案持续保留各页的选择方式和指定人物，并在能够明确归属时找回本机旧设置；删除后新建的档案独立保存。指定一人时，蝴蝶效应的新一轮生成使用该人物，不再意外带入整份名单。\n- 人物选择写入失败时，本次打开仍使用刚选的设置，并提示刷新后需要重新选择。选中人物已从档案移除时要求重新选择，不自动扩成全部人物。\n- 手书与印象曲共用音源状态：在手书里更换或移除后，返回歌曲页立即生效；本机暂存的音源也能用于手书，并能在设备存储不可用时移除。保存失败保留已保存音源，取消、切换聊天及导入途中歌曲变化均有保护。\n- 表情包新建世界书使用独立名称，不再把读取失败的同名旧书当成空书。世界书没有可靠保存回执时明确标记「保存未确认」，撤除也保留待确认状态和重试入口；不再假报已经保存或撤除。\n- 表情包写角色卡核对宿主保存回执；旧宿主通过重新读取确认。无法确认时仍显示上次确认的插件内容并提示重试，避免乐观缓存冒充保存成功。\n- 自动留忆的成就和手帐批注只由本次任务接收，并发的手动生成或其他自动步骤不会借用、覆盖或清除；完成、失败和取消后分别清理。\n- 「本页人物」新增「按档案剧情出场」：只写档案记忆里已经出场过的人物，建档时勾了、但剧情里还没登场的人不会被写进去；档案更新后自动跟着变。选择方式下面会写清每种方式的区别，选这一项时会列出现在找到的人物。\n- 修复蝴蝶效应改了「本页人物」后再更新，标题里仍列出整份人物名单的问题：现在跟着这次选的人物走。番外、前世这类页面用部分人物生成后也能正常读回，不会提示「暂不可读取」。已经生成的平行世界内容不会自动改写，想让旧内容只围绕选中的人物，需要重新生成这一页。\n- 多人卡的蝴蝶效应：每个分歧点的「本人发言／最终发言」只写这一段剧情里的人——先看这段引用的档案记忆里有谁，再看正文里点到了谁；已经生成的旧分歧点打开就是新样子，不用重新生成。实在找不到时，和前世、番外页面一样只显示前 3 个名字和「等 N 人」，不再把几十个名字平铺成一大串。\n- 多人卡的邮箱来信、前世今生、番外、印象曲演唱者、节日贺卡落款，也和蝴蝶效应一样：这一篇写的是谁就显示谁（先看引用的档案记忆，再看正文点到的人），不再把整份名单「角色:某某、角色:某某……」平铺出来；人物名前面的「角色:」也不再显示。「按档案剧情出场」现在也认得名单里写成「角色:某某」的人物。旧内容打开就是新样子，不用重新生成。\n- 蝴蝶效应的终端抬头、Ω 最终发言，以及分歧点里认不出人物时，改用这一页「本页人物」现在的选择（指定人物或按档案剧情出场），不再显示第一次生成时存下的整份名单。\n- 多人卡建档选人页新增「找人物」：选好世界书后，可以点「本地找人物（不花额度）」按条目的文字格式猜出人名，或点「用模型扫描整本世界书」让模型把整本书里的人物、化名和所在条目找出来（会先说明要请求几次、消耗额度，确认后才开始）。结果列成候选，勾选后一次加入名单，每个人自动关联自己所在的条目；已经在名单里的人只补上条目，不会重复。一个条目里写了好几个 NPC 时不用再一个个拆。\n- 一个世界书条目里写了一整个门派或好几个 NPC 时，这个条目的关键词（地名、门派名等）不再拿来判断谁出场，避免档案里一提到「西南」就把整个门派的人都算成出场；只在条目只属于一个人、条目标题里写着他名字时才用关键词，名字本身照常认。\n- 修复楼层里自动留忆的信封整个不见、刷新也不回来的问题：酒馆或别的插件「只拼一遍提示词」时会发出开始生成、却永远不发结束，或者生成结束后留下一个已经写完的流式对象，插件以为一直在生成，信封就一直不画。现在这两种都不算在生成；漏掉结束信号时 20 秒后也会自己恢复。\n- 修复插件里的更新日志显示成 1.0.58 旧内容的问题：现在显示这一版自己的修复说明；从旧版本更新时，1.0.59 起每一版的说明分开列出。\n\n已经生成的旧内容保留，不会自动改写或发起付费请求。人物设置用于之后明确发起的新一轮生成；继续旧任务仍沿用其原有快照。\n\n## 1.0.60 更新记录\n\n## 本次修复\n\n- 多张角色卡共用世界书时，表情包规则分别保存，只更新和撤掉本角色可确认归属的条目；同一本世界书的保存依次进行，避免互相覆盖。\n- 设备暂时无法保存音源时，仍可更换或移除本次打开期间的临时音源；已经保存的歌曲在存储失败时继续保留。\n- 归属不明的旧表情包条目保留原文，并在操作结果中提示检查；不改写既有聊天、档案和生成提示词。\n\n## 1.0.59 更新记录\n\n## 本次修复\n\n- 自动留忆整轮绑定发起时的聊天和档案版本；切换聊天、取消或停用后，后续步骤不会借用另一个聊天继续生成。\n- 自动留忆连续运行超过 40 轮也能继续；移除误用于持久历史的条数限制，保留已经生成的信件、成就和回看内容。\n- 保存单方外貌后，另一方仍可从原人设提取；清空手填外貌后也能重新提取。\n- 印象曲导入支持完整取消：停止、移除或换入新音源后，旧导入不会晚到并覆盖结果。\n- 连续修改贴图名称、含义或图片时按字段合并保存；迟到的重画和世界书同步不会把新编辑改回旧值。\n- 更新遇到网络、认证、JSON 或普通服务器错误时会停止并提示；只有明确的 Git 本地文件冲突才保留 main 分支原有的覆盖安装路径。\n- 模型回复最后一段 JSON 截断时，不再把前面的完整示例当作最终成果保存；正常的小格式修补仍可使用。\n- 情报中声称已发生的共同往事需要有效档案引用和可核对原文；旧情报仍可查看，依据无法核实的会明确标注。\n\n## 1.0.58 更新记录\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 印象曲页新增「听这首歌」播放器：在 Suno 做好歌后，把歌曲链接粘回来（或选本机音频文件），就能直接在页面里听；制作手书时也直接用这首，不用再导一次。音源只存在这台设备上。\n- 播放器是唱片样式：播放时黑胶唱片从封套里滑出来转动，进度条可以拖动。导入链接、选择文件、移除音源都收在「更换音源」里。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 情侣头像选 NAI 4.5 时：两人外貌里写明了性别，会自动加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；外貌还是整句或中文写法时，外貌栏下会提示，点生成前也会问要不要先整理成英文 tag。\n- 柏宝绘角色库：名字写成 {{user}} / {{char}} 的条目也能对上当前的你和角色；名字只差全角半角、首尾空格或大小写也能对上，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌来自柏宝绘角色库的哪一条；没对上会说明原因（库里没有这个名字、有两条都对上、只写了衣着动作，或柏宝绘版本太旧）。\n- 修复图片设置里点了「保存外貌」、关掉再打开还是旧外貌的问题：现在会显示你上次保存的外貌，确认绘图后就用新外貌重画；这张图原来的记录不会被改。\n- 图片设置里「重新构思／提取外貌」整理出的外貌更完整：人设里写明的性别、发型、眼色、脸部特征、身高体型、配饰等都会保留，不再压成几个概括词。外貌栏能写的长度从 400 字放宽到 1200 字，自己手写的外貌按原样保存。\n- 修复用酒馆连接配置生成时总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走，不容易再被中转站掐断而出现「生成连接请求失败」。如果仍是完整响应、30 秒没收到数据就断开，提示会告诉你去「高级生成参数」改成「使用流式」。\n- 「内容」页「把勾选的项目排进任务中心」旁边多了「全选」。\n- 新建档案和完全重建前，会先显示这次要读多少层、大约多少字、预计几次请求、分几批。如果有标签占了很大一部分字数（比如其他插件写进聊天的旧总结），会列出来让你勾选不读；特别长的楼层也会单独列出来，并显示里面的开头，方便判断是不是旧总结。\n- 修复长聊天建档时反复提示「本批草稿尚未确认保存到本机」、点保存也没用的问题：聊天很长时这批草稿也很大，手机存进本机要好几秒，以前超过 5 秒就当作失败；现在按草稿大小放宽等待时间（最长 2 分钟），真的没存完也会说明是存得太慢。\n- 修复改过角色卡之后，这个聊天的建档、更新、继续、导出、丢弃全部报「本机草稿读取未完成」、什么都点不了的问题。\n- 档案不再在聊天文件里长期留着整份聊天原文的副本：建档完成后和每次「另起任务」都不会再额外占一份，聊天文件不会越用越大；暂停的旧草稿也会自动精简（还有没保存成果的草稿不动）。\n- 长聊天建档时手机卡顿明显减少；本机草稿保存超时但其实已经存进去时，不再导致之后每次保存都失败。\n- 流式生成改成「多久没收到新内容」才算超时，模型慢慢写长回复不会再在 3 分钟被掐断；真卡住时，已收到的内容会留成草稿，可以接着生成。\n- 模型回复的 JSON 有多余逗号、中文引号、注释、字符串里换行这类小毛病时，会先自动修补再读取，不用重新付费生成；回复格式小错不再被当成截断而自动付费续写。\n- 带思考过程标签的正常回复不再被误判成「返回了 HTML 页面」，真正的代理错误页仍会被拦下；推理把额度用完、回复为空时不再自动再付费重试。\n- 任务中心里属于其他聊天的「第二次生成」按钮不再对当前聊天生效。\n- 表情包：一组里有一张没画好，已经画好的会保留，只补画缺的；点「停止等待」后，正在画的那张画完也会留下；保存时切换了角色不会写错卡；保存和单张重画防双击。\n- 智绘姬：取消后，在它真正画完之前不会让你重复提交；画成功但返回的是图片链接时会自动存下来，不会当成失败再用另一个生图插件付费重画。柏宝绘画好但没存进图库时也会自动存下来。\n- CG 发给智绘姬时会明确带上横图或竖图尺寸（按你在智绘姬里设置的尺寸调换方向，正方形尺寸不动），不会沿用上一次请求的尺寸；歌曲封面和多格日常漫画按竖图发。\n- 情侣头像：生成防双击，可以「停止等待」；历史页缩略图更省内存。\n- 手机更流畅：自动记忆的信件不再每 2 秒整个重算，打开的信件不再反复重画（长按复制不会被打断）；聊天头像不再每条消息都从存储重新读取，也不再占用酒馆共用的本地存储（旧数据自动迁移）；没有自动记忆计划时不再往聊天页面塞大段样式；流式输出时头像和表情包不再反复全量扫描；印象曲音频关掉后释放内存。\n- 只用新版自动记忆计划的聊天，切换过去时也会自动唤醒，不用先手动打开一次档案。\n- 表情包用 NAI 4.5 画时改用它更擅长的 tag 写法（白底、几行几列、留空隙），其他模型的写法不变；切图也更聪明了：奶油色、粉色或渐变的底也能按形状切开，多画了几个时只留最大的几个而不是把两个粘在一起，排列和要求不一样时按图上真实的空隙切。\n- 修复情侣头像「调整裁切」里左右移动没反应的问题：以前裁切框被限制在自己那一半，放大为 1 时一点都动不了；现在左右两边都能在整张图上左右移动，可以越过中线把人物放到正中。以前保存过的裁切位置不变。\n- 邮箱信末小画换了画法：新信不再让模型自己画 SVG（画出来太抽象），改回以前插件本地画的小画（小马、小猫、兔子、花、茶杯、书等）。接了柏宝绘或智绘姬时，会按这封信的情节在后台画一张彩铅简笔画放在信末，画好之前和没画成时先显示本地小画，没画成还能点「用生图插件重画小画」。邮箱顶部可以开关「信末小画用生图插件画」。写信时顺带写好画面描述，不额外调用文字模型；每封信多一次生图。以前的信照原样显示。\n- 修复：自动留忆出过一封信后，再往下聊时那封信会变成「留忆 还差几层」的提示，之后的楼层也不再显示留忆。现在信留在出信那一楼，倒计时跟着最新一楼走。\n- 设置「界面主题」里新增「字体大小」：可以把心迹回廊自己界面的字调小或调大（80%–125%，默认 100%），主界面、弹窗和聊天楼层里的信封一起变，不影响酒馆聊天正文。\n- 其他已有功能保持不变。\n";
+const RELEASE_README = "# 心迹回廊 1.0.61\n\n## 本次修复\n\n- 「本页人物」不再因档案更新而重置为「沿用档案人物」。同一档案持续保留各页的选择方式和指定人物，并在能够明确归属时找回本机旧设置；删除后新建的档案独立保存。指定一人时，蝴蝶效应的新一轮生成使用该人物，不再意外带入整份名单。\n- 人物选择写入失败时，本次打开仍使用刚选的设置，并提示刷新后需要重新选择。选中人物已从档案移除时要求重新选择，不自动扩成全部人物。\n- 手书与印象曲共用音源状态：在手书里更换或移除后，返回歌曲页立即生效；本机暂存的音源也能用于手书，并能在设备存储不可用时移除。保存失败保留已保存音源，取消、切换聊天及导入途中歌曲变化均有保护。\n- 表情包新建世界书使用独立名称，不再把读取失败的同名旧书当成空书。世界书没有可靠保存回执时明确标记「保存未确认」，撤除也保留待确认状态和重试入口；不再假报已经保存或撤除。\n- 表情包写角色卡核对宿主保存回执；旧宿主通过重新读取确认。无法确认时仍显示上次确认的插件内容并提示重试，避免乐观缓存冒充保存成功。\n- 自动留忆的成就和手帐批注只由本次任务接收，并发的手动生成或其他自动步骤不会借用、覆盖或清除；完成、失败和取消后分别清理。\n- 「本页人物」新增「按档案剧情出场」：只写档案记忆里已经出场过的人物，建档时勾了、但剧情里还没登场的人不会被写进去；档案更新后自动跟着变。选择方式下面会写清每种方式的区别，选这一项时会列出现在找到的人物。\n- 修复蝴蝶效应改了「本页人物」后再更新，标题里仍列出整份人物名单的问题：现在跟着这次选的人物走。番外、前世这类页面用部分人物生成后也能正常读回，不会提示「暂不可读取」。已经生成的平行世界内容不会自动改写，想让旧内容只围绕选中的人物，需要重新生成这一页。\n- 多人卡的蝴蝶效应：每个分歧点的「本人发言／最终发言」只写这一段剧情里的人——先看这段引用的档案记忆里有谁，再看正文里点到了谁；已经生成的旧分歧点打开就是新样子，不用重新生成。实在找不到时，和前世、番外页面一样只显示前 3 个名字和「等 N 人」，不再把几十个名字平铺成一大串。\n- 多人卡的邮箱来信、前世今生、番外、印象曲演唱者、节日贺卡落款，也和蝴蝶效应一样：这一篇写的是谁就显示谁（先看引用的档案记忆，再看正文点到的人），不再把整份名单「角色:某某、角色:某某……」平铺出来；人物名前面的「角色:」也不再显示。「按档案剧情出场」现在也认得名单里写成「角色:某某」的人物。旧内容打开就是新样子，不用重新生成。\n- 蝴蝶效应的终端抬头、Ω 最终发言，以及分歧点里认不出人物时，改用这一页「本页人物」现在的选择（指定人物或按档案剧情出场），不再显示第一次生成时存下的整份名单。\n- 多人卡建档选人页新增「找人物」：选好世界书后，可以点「本地找人物（不花额度）」按条目的文字格式猜出人名，或点「用模型扫描整本世界书」让模型把整本书里的人物、化名和所在条目找出来（会先说明要请求几次、消耗额度，确认后才开始）。结果列成候选，勾选后一次加入名单，每个人自动关联自己所在的条目；已经在名单里的人只补上条目，不会重复。一个条目里写了好几个 NPC 时不用再一个个拆。\n- 人物可以填「化名／外号」：选人页每个人物下面多了这一栏，用模型扫描世界书时找到的化名也会自动填进去。生成时会告诉模型这是同一个人——以化名出场时，不知情的人只认得化名，不会把化名和真名写成两个人；「按档案剧情出场」和各页面署名也认得化名。\n- 一个世界书条目里写了一整个门派或好几个 NPC 时，这个条目的关键词（地名、门派名等）不再拿来判断谁出场，避免档案里一提到「西南」就把整个门派的人都算成出场；只在条目只属于一个人、条目标题里写着他名字时才用关键词，名字本身照常认。\n- 修复楼层里自动留忆的信封整个不见、刷新也不回来的问题：酒馆或别的插件「只拼一遍提示词」时会发出开始生成、却永远不发结束，或者生成结束后留下一个已经写完的流式对象，插件以为一直在生成，信封就一直不画。现在这两种都不算在生成；漏掉结束信号时 20 秒后也会自己恢复。\n- 修复插件里的更新日志显示成 1.0.58 旧内容的问题：现在显示这一版自己的修复说明；从旧版本更新时，1.0.59 起每一版的说明分开列出。\n\n已经生成的旧内容保留，不会自动改写或发起付费请求。人物设置用于之后明确发起的新一轮生成；继续旧任务仍沿用其原有快照。\n\n## 1.0.60 更新记录\n\n## 本次修复\n\n- 多张角色卡共用世界书时，表情包规则分别保存，只更新和撤掉本角色可确认归属的条目；同一本世界书的保存依次进行，避免互相覆盖。\n- 设备暂时无法保存音源时，仍可更换或移除本次打开期间的临时音源；已经保存的歌曲在存储失败时继续保留。\n- 归属不明的旧表情包条目保留原文，并在操作结果中提示检查；不改写既有聊天、档案和生成提示词。\n\n## 1.0.59 更新记录\n\n## 本次修复\n\n- 自动留忆整轮绑定发起时的聊天和档案版本；切换聊天、取消或停用后，后续步骤不会借用另一个聊天继续生成。\n- 自动留忆连续运行超过 40 轮也能继续；移除误用于持久历史的条数限制，保留已经生成的信件、成就和回看内容。\n- 保存单方外貌后，另一方仍可从原人设提取；清空手填外貌后也能重新提取。\n- 印象曲导入支持完整取消：停止、移除或换入新音源后，旧导入不会晚到并覆盖结果。\n- 连续修改贴图名称、含义或图片时按字段合并保存；迟到的重画和世界书同步不会把新编辑改回旧值。\n- 更新遇到网络、认证、JSON 或普通服务器错误时会停止并提示；只有明确的 Git 本地文件冲突才保留 main 分支原有的覆盖安装路径。\n- 模型回复最后一段 JSON 截断时，不再把前面的完整示例当作最终成果保存；正常的小格式修补仍可使用。\n- 情报中声称已发生的共同往事需要有效档案引用和可核对原文；旧情报仍可查看，依据无法核实的会明确标注。\n\n## 1.0.58 更新记录\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 印象曲页新增「听这首歌」播放器：在 Suno 做好歌后，把歌曲链接粘回来（或选本机音频文件），就能直接在页面里听；制作手书时也直接用这首，不用再导一次。音源只存在这台设备上。\n- 播放器是唱片样式：播放时黑胶唱片从封套里滑出来转动，进度条可以拖动。导入链接、选择文件、移除音源都收在「更换音源」里。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 情侣头像选 NAI 4.5 时：两人外貌里写明了性别，会自动加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；外貌还是整句或中文写法时，外貌栏下会提示，点生成前也会问要不要先整理成英文 tag。\n- 柏宝绘角色库：名字写成 {{user}} / {{char}} 的条目也能对上当前的你和角色；名字只差全角半角、首尾空格或大小写也能对上，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌来自柏宝绘角色库的哪一条；没对上会说明原因（库里没有这个名字、有两条都对上、只写了衣着动作，或柏宝绘版本太旧）。\n- 修复图片设置里点了「保存外貌」、关掉再打开还是旧外貌的问题：现在会显示你上次保存的外貌，确认绘图后就用新外貌重画；这张图原来的记录不会被改。\n- 图片设置里「重新构思／提取外貌」整理出的外貌更完整：人设里写明的性别、发型、眼色、脸部特征、身高体型、配饰等都会保留，不再压成几个概括词。外貌栏能写的长度从 400 字放宽到 1200 字，自己手写的外貌按原样保存。\n- 修复用酒馆连接配置生成时总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走，不容易再被中转站掐断而出现「生成连接请求失败」。如果仍是完整响应、30 秒没收到数据就断开，提示会告诉你去「高级生成参数」改成「使用流式」。\n- 「内容」页「把勾选的项目排进任务中心」旁边多了「全选」。\n- 新建档案和完全重建前，会先显示这次要读多少层、大约多少字、预计几次请求、分几批。如果有标签占了很大一部分字数（比如其他插件写进聊天的旧总结），会列出来让你勾选不读；特别长的楼层也会单独列出来，并显示里面的开头，方便判断是不是旧总结。\n- 修复长聊天建档时反复提示「本批草稿尚未确认保存到本机」、点保存也没用的问题：聊天很长时这批草稿也很大，手机存进本机要好几秒，以前超过 5 秒就当作失败；现在按草稿大小放宽等待时间（最长 2 分钟），真的没存完也会说明是存得太慢。\n- 修复改过角色卡之后，这个聊天的建档、更新、继续、导出、丢弃全部报「本机草稿读取未完成」、什么都点不了的问题。\n- 档案不再在聊天文件里长期留着整份聊天原文的副本：建档完成后和每次「另起任务」都不会再额外占一份，聊天文件不会越用越大；暂停的旧草稿也会自动精简（还有没保存成果的草稿不动）。\n- 长聊天建档时手机卡顿明显减少；本机草稿保存超时但其实已经存进去时，不再导致之后每次保存都失败。\n- 流式生成改成「多久没收到新内容」才算超时，模型慢慢写长回复不会再在 3 分钟被掐断；真卡住时，已收到的内容会留成草稿，可以接着生成。\n- 模型回复的 JSON 有多余逗号、中文引号、注释、字符串里换行这类小毛病时，会先自动修补再读取，不用重新付费生成；回复格式小错不再被当成截断而自动付费续写。\n- 带思考过程标签的正常回复不再被误判成「返回了 HTML 页面」，真正的代理错误页仍会被拦下；推理把额度用完、回复为空时不再自动再付费重试。\n- 任务中心里属于其他聊天的「第二次生成」按钮不再对当前聊天生效。\n- 表情包：一组里有一张没画好，已经画好的会保留，只补画缺的；点「停止等待」后，正在画的那张画完也会留下；保存时切换了角色不会写错卡；保存和单张重画防双击。\n- 智绘姬：取消后，在它真正画完之前不会让你重复提交；画成功但返回的是图片链接时会自动存下来，不会当成失败再用另一个生图插件付费重画。柏宝绘画好但没存进图库时也会自动存下来。\n- CG 发给智绘姬时会明确带上横图或竖图尺寸（按你在智绘姬里设置的尺寸调换方向，正方形尺寸不动），不会沿用上一次请求的尺寸；歌曲封面和多格日常漫画按竖图发。\n- 情侣头像：生成防双击，可以「停止等待」；历史页缩略图更省内存。\n- 手机更流畅：自动记忆的信件不再每 2 秒整个重算，打开的信件不再反复重画（长按复制不会被打断）；聊天头像不再每条消息都从存储重新读取，也不再占用酒馆共用的本地存储（旧数据自动迁移）；没有自动记忆计划时不再往聊天页面塞大段样式；流式输出时头像和表情包不再反复全量扫描；印象曲音频关掉后释放内存。\n- 只用新版自动记忆计划的聊天，切换过去时也会自动唤醒，不用先手动打开一次档案。\n- 表情包用 NAI 4.5 画时改用它更擅长的 tag 写法（白底、几行几列、留空隙），其他模型的写法不变；切图也更聪明了：奶油色、粉色或渐变的底也能按形状切开，多画了几个时只留最大的几个而不是把两个粘在一起，排列和要求不一样时按图上真实的空隙切。\n- 修复情侣头像「调整裁切」里左右移动没反应的问题：以前裁切框被限制在自己那一半，放大为 1 时一点都动不了；现在左右两边都能在整张图上左右移动，可以越过中线把人物放到正中。以前保存过的裁切位置不变。\n- 邮箱信末小画换了画法：新信不再让模型自己画 SVG（画出来太抽象），改回以前插件本地画的小画（小马、小猫、兔子、花、茶杯、书等）。接了柏宝绘或智绘姬时，会按这封信的情节在后台画一张彩铅简笔画放在信末，画好之前和没画成时先显示本地小画，没画成还能点「用生图插件重画小画」。邮箱顶部可以开关「信末小画用生图插件画」。写信时顺带写好画面描述，不额外调用文字模型；每封信多一次生图。以前的信照原样显示。\n- 修复：自动留忆出过一封信后，再往下聊时那封信会变成「留忆 还差几层」的提示，之后的楼层也不再显示留忆。现在信留在出信那一楼，倒计时跟着最新一楼走。\n- 设置「界面主题」里新增「字体大小」：可以把心迹回廊自己界面的字调小或调大（80%–125%，默认 100%），主界面、弹窗和聊天楼层里的信封一起变，不影响酒馆聊天正文。\n- 其他已有功能保持不变。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -31066,6 +31066,26 @@ function sourceRef(raw) {
     return ref;
 }
 
+// 化名、外号、伪装身份。是同一个人，不是另一个人物；没有时不写这个字段，旧名单不变。
+function normalizeAliases(values, name = '') {
+    const own = String(name || '').trim();
+    const seen = new Set();
+    const out = [];
+    for (const value of Array.isArray(values) ? values : []) {
+        if (typeof value !== 'string') continue;
+        const alias = value.replace(/\s+/g, ' ').trim().slice(0, 40);
+        if (!alias || alias === own || seen.has(alias)) continue;
+        seen.add(alias); out.push(alias);
+        if (out.length >= 12) break;
+    }
+    return out;
+}
+function personAliases(person) {
+    if (person.aliases === undefined) return {};
+    const aliases = normalizeAliases(array(person.aliases, 'person.aliases'), person.name);
+    return aliases.length ? { aliases } : {};
+}
+
 function people(raw) {
     const ids = new Set();
     return array(raw, 'people').map(person => {
@@ -31077,6 +31097,7 @@ function people(raw) {
             id,
             name: string(person.name, 'person.name'),
             ...(person.identity === 'user' ? { identity: 'user' } : {}),
+            ...personAliases(person),
             sourceRefs: array(person.sourceRefs, 'person.sourceRefs').map(sourceRef),
         };
     });
@@ -31138,6 +31159,7 @@ function participantIndexPayload(raw) {
         people: snapshot.people.map(person => ({
             id: person.id,
             name: person.name,
+            ...(person.aliases?.length ? { aliases: [...person.aliases] } : {}),
             identity: person.identity === 'user' ? 'user' : 'character',
             summary: person.sourceRefs.map(ref => ref.title).filter(Boolean).join('、').slice(0, 240),
             sourceKeys: person.sourceRefs.map(ref => ({ world: ref.world, uid: ref.uid, title: ref.title })),
@@ -31148,13 +31170,13 @@ function participantIndexPayload(raw) {
 function participantIndexPromptBlock(raw) {
     const payload = participantIndexPayload(raw);
     if (!payload) return '';
-    return `\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:\n${JSON.stringify(payload, null, 2)}\n\n以上是用户选定人物的索引。每人只有姓名、短标题和来源键；正文只在受控来源段出现一次，这里不是证据全文。不能把角色卡名称当作选定人物的姓名。保留其他已有历史，不因这份人物名单而删除或改写。\n`;
+    return `\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:\n${JSON.stringify(payload, null, 2)}\n\n以上是用户选定人物的索引。每人只有姓名、化名、短标题和来源键；正文只在受控来源段出现一次，这里不是证据全文。aliases 是同一个人的化名、外号或伪装身份，不是另一个人物：以化名出场时，在场不知情的人只知道化名，叙述里可以写明这是谁；不要把化名和真名写成两个人。不能把角色卡名称当作选定人物的姓名。保留其他已有历史，不因这份人物名单而删除或改写。\n`;
 }
 
 function participantPromptBlock(raw) {
     const snapshot = normalizeParticipantSnapshot(raw);
     if (!snapshot) return '';
-    return `\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:\n${JSON.stringify(snapshot, null, 2)}\n\n以上是用户选定的人物设定，不是已经发生的事实。不能把角色卡名称当作选定人物的姓名。保留其他已有历史，不因这份人物名单而删除或改写。\n`;
+    return `\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:\n${JSON.stringify(snapshot, null, 2)}\n\n以上是用户选定的人物设定，不是已经发生的事实。aliases 是同一个人的化名、外号或伪装身份，不是另一个人物：以化名出场时，在场不知情的人只知道化名，叙述里可以写明这是谁；不要把化名和真名写成两个人。不能把角色卡名称当作选定人物的姓名。保留其他已有历史，不因这份人物名单而删除或改写。\n`;
 }
 
 function stringName(value, fallback = '') {
@@ -31244,15 +31266,26 @@ function storyOwnerLabelAllowed(value, memoryBank = null) {
     return parts.every(part => names.has(part)) && new Set(parts).size === parts.length;
 }
 
+function aliasMap(memoryBank, people) {
+    const map = new Map();
+    const rows = Array.isArray(people) && people.some(person => person && typeof person === 'object') ? people : (() => {
+        try { return normalizeParticipantRoster(memoryBank?.[PARTICIPANTS_KEY])?.people || []; } catch { return []; }
+    })();
+    for (const person of rows) if (person?.name && Array.isArray(person.aliases) && person.aliases.length) map.set(person.name, person.aliases);
+    return map;
+}
+
 function promptIdentityLines(context, people = null, memoryBank = null) {
     const story = resolveStoryIdentities(memoryBank, context, people);
     const names = Array.isArray(people)
         ? uniqueNames(people.map(person => typeof person === 'string' ? person : person?.name))
         : story.ownerNames;
+    const aliasOf = aliasMap(memoryBank, people);
+    const labelled = names.map(name => aliasOf.get(name)?.length ? `${name}（化名／外号：${aliasOf.get(name).join('、')}）` : name);
     const userLine = `当前用户：${story.userDisplay}${story.compatNote ? `\n${story.compatNote}` : ''}`;
     if (names.length) {
         return `角色卡名称：${story.cardName}。这是卡名，不是人物。
-选定人物：${names.join('、')}
+选定人物：${labelled.join('、')}${labelled.some((label, index) => label !== names[index]) ? '\n括号里是同一个人的化名或外号，不是另一个人。' : ''}
 ${userLine}`;
     }
     return `角色卡名称：${story.cardName}。卡名不是人物；人物姓名以档案记忆 participants、选定名单和资料里的真名为准。单人卡时，卡名往往就是那个人的真名。
@@ -31295,6 +31328,7 @@ function participantName(raw, id) {
     return snapshot.people.find(person => person.id === id)?.name ?? '';
 }
 
+__m_core_participants_js.normalizeAliases = normalizeAliases;
 __m_core_participants_js.normalizeParticipantRoster = normalizeParticipantRoster;
 __m_core_participants_js.normalizeParticipantSnapshot = normalizeParticipantSnapshot;
 __m_core_participants_js.selectedParticipantSnapshot = selectedParticipantSnapshot;
@@ -32625,6 +32659,8 @@ function castTerms(person, roster) {
     add(participants.plainPersonName(person.name));
     for (const part of participants.plainPersonName(person.name).split(/[·・•\s/()（）「」【】]+/)) add(part);
     for (const keyword of trustedKeywords(person, roster)) add(keyword);
+    // 用户确认过的化名、外号也算这个人。
+    for (const alias of person.aliases || []) add(alias);
     return [...terms];
 }
 function memoryCastText(item) {
@@ -91552,6 +91588,7 @@ async function showParticipantPicker({ context = contextApi.currentCharacterGuar
           <article class="rmt-participant-person" data-rmt-participant-person="${index}">
             <label class="rmt-participant-select"><input type="checkbox" data-rmt-participant-selected="${index}" ${selected(person.id) ? 'checked' : ''}> ${text.esc(selectionLabel)}</label>
             <label>人物名字<input type="text" data-rmt-participant-name="${index}" value="${text.esc(person.name)}"></label>
+            <label>化名／外号<input type="text" data-rmt-participant-aliases="${index}" value="${text.esc((person.aliases || []).join('、'))}" placeholder="没有可不填，多个用顿号分开"></label>
             <small>${person.sourceRefs.length ? person.sourceRefs.map(ref => `${text.esc(ref.world)} · ${text.esc(ref.title)} (#${text.esc(ref.uid)})`).join('<br>') : '手动补充，未关联世界书条目'}</small>
             ${person.sourceRefs.length ? `<button type="button" class="rmt-btn" data-rmt-participant-duplicate="${index}">这些条目里还有其他人物</button>` : ''}
           </article>`).join('') : '<p>尚未加入人物。展开世界书条目后勾选，或手动补充。</p>';
@@ -91587,8 +91624,15 @@ async function showParticipantPicker({ context = contextApi.currentCharacterGuar
             const existing = draft.people.find(person => people.plainPersonName(person.name) === plain);
             if (existing) {
                 for (const entry of refs) if (!existing.sourceRefs.some(ref => sourceKey(ref) === sourceKey(entry))) existing.sourceRefs.push(copySource(entry));
+                const aliases = people.normalizeAliases([...(existing.aliases || []), ...(row.aliases || [])], existing.name);
+                if (aliases.length) existing.aliases = aliases;
                 setSelected(existing.id, true); merged += 1;
-            } else { addPerson(row.name, refs); added += 1; }
+            } else {
+                const person = addPerson(row.name, refs);
+                const aliases = people.normalizeAliases(row.aliases || [], person.name);
+                if (aliases.length) person.aliases = aliases;
+                added += 1;
+            }
         }
         current.found = [];
         changed();
@@ -91628,6 +91672,14 @@ async function showParticipantPicker({ context = contextApi.currentCharacterGuar
     }
     function changed({ entries = true } = {}) { renderPeople(); if (entries) renderEntries(); status(current, ''); }
     current.element.addEventListener('input', event => {
+        const aliasIndex = event.target?.dataset?.rmtParticipantAliases;
+        if (aliasIndex !== undefined && !current.busy && current.isCurrent()) {
+            event.stopPropagation();
+            const person = draft.people[Number(aliasIndex)];
+            const aliases = people.normalizeAliases(event.target.value.split(/[、,，;；/]/), person.name);
+            if (aliases.length) person.aliases = aliases; else delete person.aliases;
+            return;
+        }
         const index = event.target?.dataset?.rmtParticipantName;
         if (index === undefined || current.busy || !current.isCurrent()) return;
         event.stopPropagation();
