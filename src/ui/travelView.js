@@ -7,6 +7,8 @@ import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as modes_travel from '../modes/travel.js';
 import * as ui_overlay from './overlay.js';
+import * as repository from '../archive/repository.js';
+import * as route_people from '../core/routeParticipants.js';
 
 export function selectedTravelLocation() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.TRAVEL) return null;
@@ -457,12 +459,27 @@ function travelKeepsakeHtml(item, session) {
     </section>`;
 }
 
+// 多人卡：这一站说话的是谁就写谁，不显示角色卡名。
+export function travelSpeakerLabel(item, lines = []) {
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    const cardName = core_text.normalizeText(snapshot?.characterName || core_context.getContext()?.name2, 100);
+    let context = null, memory = snapshot?.memory || null;
+    if (!snapshot) { try { context = core_context.getContext(); memory = repository.getImportedMemory(context); } catch { /* 无 live 档案时用卡名。 */ } }
+    try {
+        const fallback = route_people.storyCastFallback('travel', context, memory, '', { historical: !!snapshot });
+        const label = route_people.storyCastLabel(memory, { sourceMemoryIds: item?.sourceMemoryIds,
+            text: [item?.name, item?.summary, ...lines].filter(value => typeof value === 'string').join('\n'), fallback });
+        if (label) return core_text.normalizeText(label, 100);
+    } catch { /* 单人卡或无名单时用卡名。 */ }
+    return cardName || '他';
+}
+
 function travelDialogueHtml(item, session) {
     const lines = Array.isArray(item?.dialogueLines) ? item.dialogueLines : [];
     const max = Math.max(0, lines.length - 1);
     const index = Math.max(0, Math.min(max, Math.floor(Number(session.dialogueIndex) || 0)));
     session.dialogueIndex = index;
-    const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext()?.name2, 100) || '他';
+    const charName = travelSpeakerLabel(item, lines);
     return `<section class="rmt-travel-dialogue" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的地点对话">
       <button type="button" class="rmt-travel-detail-close" data-rmt-action="travel-close-detail" aria-label="收起地点对话">×</button>
       <div class="rmt-travel-dialogue-place"><small>NEARBY STOP · ${core_text.esc(item.distanceLabel)}</small><h3>${core_text.esc(item.name)}</h3><p>${core_text.esc(item.summary)}</p></div>
