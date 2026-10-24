@@ -293,3 +293,18 @@ test('butterfly falls back to the page choice (specified or archive cast), not t
     assert.equal(name({ trueEnding: true, intervention: 'x' }, { subject: stored }, memory, ctx), '顾南星', 'archive cast');
     delete globalThis.localStorage;
 });
+
+test('keywords of an entry shared by several NPCs (a faction entry) do not mark all of them as present', () => {
+    const faction = { world: 'w', uid: '8', title: '某教势力与npc', content: '', keys: ['西南', '教众'] };
+    const own = { world: 'w', uid: '7', title: 'npc：甲某', content: '', keys: ['阿甲'] };
+    const roster = { version: 1, cardType: 'multi', selectedIds: ['a', 'b', 'c'], people: [
+        { id: 'a', name: '甲某', sourceRefs: [own] },
+        { id: 'b', name: '乙长老', sourceRefs: [faction] },
+        { id: 'c', name: '丙护法', sourceRefs: [faction] },
+    ] };
+    const a = api();
+    const cast = summary => a.archiveCastIds(roster, { memories: [{ id: 'M1', title: '', summary, anchors: [], participants: [] }] });
+    assert.deepEqual(cast('一行人到了西南，见到许多教众。'), [], 'shared faction keywords alone name nobody');
+    assert.deepEqual(cast('乙长老在西南拦路。'), ['b'], 'the name itself still counts');
+    assert.deepEqual(cast('阿甲来了。'), ['a'], 'keywords of a single-person entry titled with the name still count');
+});
