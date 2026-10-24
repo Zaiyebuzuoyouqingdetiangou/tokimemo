@@ -1,0 +1,266 @@
+✖ historical inbox uses the displayed archive, even when live memory IDs collide (3.758051ms)
+✖ inbox fallback uses the current page choice, but historical fallback keeps its own saved people (1.927975ms)
+✖ historical butterfly branch names come from snapshot.memory, not its container (1.49511ms)
+✖ time stories resolve names in the shown archive and use page choice only for live fallback (2.541922ms)
+✖ past lives read nested opening and echo references using the real stored contract (2.516253ms)
+✖ past lives body fallback includes dossier clues and annotations, not only opening prose (1.683595ms)
+✖ song labels use historical evidence while preserving duet user, narrator and custom performer (1.278122ms)
+✖ the song library uses the same cast labels as song details (1.8983ms)
+✖ holiday cards use nested archive context, reference priority, and clean single-name prefixes (2.099924ms)
+✖ holiday and song live fallbacks use page selection, without adding an absent signature (2.702886ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 0
+ℹ fail 10
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 155.284449
+
+✖ failing tests:
+
+test at tests/healthcheck-story-cast-views.mjs:57:1
+✖ historical inbox uses the displayed archive, even when live memory IDs collide (3.758051ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  '某乙' !== '某丙某'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:61:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '某乙',
+    expected: '某丙某',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-story-cast-views.mjs:66:1
+✖ inbox fallback uses the current page choice, but historical fallback keeps its own saved people (1.927975ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '某甲、某乙、某丙某 等 4 人'
+  - '某丙某'
+  
+      at file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:69:16
+      at withPageChoice (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:52:16)
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:68:5)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '某甲、某乙、某丙某 等 4 人',
+    expected: '某丙某',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-story-cast-views.mjs:75:1
+✖ historical butterfly branch names come from snapshot.memory, not its container (1.49511ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /平行世界 某丙某 本人发言/. Input:
+  
+  '<div class="rmt-crt"><div class="rmt-crt-content">\n' +
+    '      \n' +
+    '      <section class="rmt-terminal-block rmt-terminal-header-block">\n' +
+    '        <div class="rmt-terminal-section-title">I. TERMINAL HEADER // 终端抬头</div>\n' +
+    '        <div class="rmt-terminal-head">&gt; TEMPORAL OBSERVATION UNIT // SUBJECT: 某甲、某乙、某丙某 等 4 人 // STATUS: UNSTABLE</div>\n' +
+    '        <div class="rmt-terminal-codeflow">0101::TEMPORAL-LINK / WORLD-LINE SCAN / SUBJECT LOCKED / DIVERGENCE SIGNAL ACTIVE</div>\n' +
+    '      </section>\n' +
+    '      <section class="rmt-terminal-block rmt-divergence-map-block">\n' +
+    '        <div class="rmt-terminal-section-title">II. DIVERGENCE MAP // 时间分歧树</div>\n' +
+    '        <div class="rmt-tree-root"><button type="button" class="rmt-node rmt-main-node" disabled><span>MAIN</span>主线 <em>LOCKED</em></button></div>\n' +
+    '        <div class="rmt-tree-trunk" aria-hidden="true"></div>\n' +
+    '        <div class="rmt-tree-branches"><button type="button" class="rmt-node rmt-branch-node active" data-rmt-node="1"><span>01</span>雨天</button></div>\n' +
+    '        <div class="rmt-tree-ending"><p role="status">Ω 观测收尾尚未完成。</p></div>\n' +
+    '      </section>\n' +
+    '      <section class="rmt-terminal-block rmt-observation-screen">\n' +
+    '            <div class="rmt-terminal-section-title">III. OBSERVATION SCREEN // 平行世界观测</div>\n' +
+    '            <div class="rmt-record-code"></div>\n' +
+    '            \n' +
+    '            <div class="rmt-mono"><b>PARALLEL SUBJECT // 平行世界 某甲、某乙、某丙某 等 4 人 本人发言</b><br>我在等你。</div>\n' +
+    '          </section>\n' +
+    '          <section class="rmt-terminal-block rmt-intervention-block"><div class="rmt-terminal-section-title">IV. CURRENT-WORLD RESPONSE // 现世回应</div><div class="rmt-intervention"></div></section>\n' +
+    '          <section class="rmt-terminal-block rmt-system-block"><div class="rmt-terminal-section-title">V. SYSTEM NOTE // 系统评估</div><div class="rmt-system-note"></div></section>\n' +
+    '    </div></div>'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:81:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<div class="rmt-crt"><div class="rmt-crt-content">\n      \n      <section class="rmt-terminal-block rmt-terminal-header-block">\n        <div class="rmt-terminal-section-title">I. TERMINAL HEADER // 终端抬头</div>\n        <div class="rmt-terminal-head">&gt; TEMPORAL OBSERVATION UNIT // SUBJECT: 某甲、某乙、某丙某 等 4 人 // STATUS: UNSTABLE</div>\n        <div class="rmt-terminal-codeflow">0101::TEMPORAL-LINK / WORLD-LINE SCAN / SUBJECT LOCKED / DIVERGENCE SIGNAL ACTIVE</div>\n      </section>\n      <section class="rmt-terminal-block rmt-divergence-map-block">\n        <div class="rmt-terminal-section-title">II. DIVERGENCE MAP // 时间分歧树</div>\n        <div class="rmt-tree-root"><button type="button" class="rmt-node rmt-main-node" disabled><span>MAIN</span>主线 <em>LOCKED</em></button></div>\n        <div class="rmt-tree-trunk" aria-hidden="true"></div>\n        <div class="rmt-tree-branches"><button type="button" class="rmt-node rmt-branch-node active" data-rmt-node="1"><span>01</span>雨天</button></div>\n        <div class="rmt-tree-ending"><p role="status">Ω 观测收尾尚未完成。</p></div>\n      </section>\n      <section class="rmt-terminal-block rmt-observation-screen">\n            <div class="rmt-terminal-section-title">III. OBSERVATION SCREEN // 平行世界观测</div>\n            <div class="rmt-record-code"></div>\n            \n            <div class="rmt-mono"><b>PARALLEL SUBJECT // 平行世界 某甲、某乙、某丙某 等 4 人 本人发言</b><br>我在等你。</div>\n          </section>\n          <section class="rmt-terminal-block rmt-intervention-block"><div class="rmt-terminal-section-title">IV. CURRENT-WORLD RESPONSE // 现世回应</div><div class="rmt-intervention"></div></section>\n          <section class="rmt-terminal-block rmt-system-block"><div class="rmt-terminal-section-title">V. SYSTEM NOTE // 系统评估</div><div class="rmt-system-note"></div></section>\n    </div></div>',
+    expected: /平行世界 某丙某 本人发言/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-story-cast-views.mjs:85:1
+✖ time stories resolve names in the shown archive and use page choice only for live fallback (2.541922ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  '某乙' !== '某丙某'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:89:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '某乙',
+    expected: '某丙某',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-story-cast-views.mjs:103:1
+✖ past lives read nested opening and echo references using the real stored contract (2.516253ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /<p>某丙某 与 我的番外卷宗<\/p>/. Input:
+  
+  '<section class="rmt-past-lives" data-rmt-past-presentation="neutral"><header class="rmt-past-head"><div><small>另一段人生 · 此刻的你我</small><h2>前世今生</h2><p>某甲、某乙、某丙某 等 4 人 与 我的番外卷宗</p></div><div class="rmt-past-actions"></div></header><div class="rmt-past-actions rmt-past-reader-back"><button type="button" class="rmt-btn" data-rmt-past-lives="library" data-rmt-past-lives-id="" >返回篇章架</button><span>旧事</span></div><nav class="rmt-past-tabs" aria-label="番外阅读章节"><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="draw" aria-pressed="true">旧梦引子</button><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="dossier" aria-pressed="false">前世卷宗</button><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="echoes" aria-pressed="false">今生回响</button><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="closing" aria-pressed="false">落款</button></nav><div class="rmt-past-reader"><div class="rmt-past-main"><section class="rmt-past-draw "><span class="rmt-past-seal" aria-hidden="true">旧梦引子</span><h3>旧事</h3><p>一段故事，正从熟悉的意象里醒来。</p><button type="button" class="rmt-btn" data-rmt-past-lives="draw" data-rmt-past-lives-id="" >拾起一页旧梦</button><button type="button" class="rmt-btn" data-rmt-past-lives="skip-draw" data-rmt-past-lives-id="" >直接入卷</button></section></div><aside class="rmt-past-margin" aria-label="旁批"><h3>旁批</h3><p class="rmt-past-hint">这页暂未留下旁批。</p></aside></div></section>'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:107:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<section class="rmt-past-lives" data-rmt-past-presentation="neutral"><header class="rmt-past-head"><div><small>另一段人生 · 此刻的你我</small><h2>前世今生</h2><p>某甲、某乙、某丙某 等 4 人 与 我的番外卷宗</p></div><div class="rmt-past-actions"></div></header><div class="rmt-past-actions rmt-past-reader-back"><button type="button" class="rmt-btn" data-rmt-past-lives="library" data-rmt-past-lives-id="" >返回篇章架</button><span>旧事</span></div><nav class="rmt-past-tabs" aria-label="番外阅读章节"><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="draw" aria-pressed="true">旧梦引子</button><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="dossier" aria-pressed="false">前世卷宗</button><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="echoes" aria-pressed="false">今生回响</button><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="closing" aria-pressed="false">落款</button></nav><div class="rmt-past-reader"><div class="rmt-past-main"><section class="rmt-past-draw "><span class="rmt-past-seal" aria-hidden="true">旧梦引子</span><h3>旧事</h3><p>一段故事，正从熟悉的意象里醒来。</p><button type="button" class="rmt-btn" data-rmt-past-lives="draw" data-rmt-past-lives-id="" >拾起一页旧梦</button><button type="button" class="rmt-btn" data-rmt-past-lives="skip-draw" data-rmt-past-lives-id="" >直接入卷</button></section></div><aside class="rmt-past-margin" aria-label="旁批"><h3>旁批</h3><p class="rmt-past-hint">这页暂未留下旁批。</p></aside></div></section>',
+    expected: /<p>某丙某 与 我的番外卷宗<\/p>/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-story-cast-views.mjs:114:1
+✖ past lives body fallback includes dossier clues and annotations, not only opening prose (1.683595ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /<p>某戊 与 我的番外卷宗<\/p>/. Input:
+  
+  '<section class="rmt-past-lives" data-rmt-past-presentation="neutral"><header class="rmt-past-head"><div><small>另一段人生 · 此刻的你我</small><h2>前世今生</h2><p>某甲、某乙、某丙某 等 4 人 与 我的番外卷宗</p></div><div class="rmt-past-actions"></div></header><div class="rmt-past-actions rmt-past-reader-back"><button type="button" class="rmt-btn" data-rmt-past-lives="library" data-rmt-past-lives-id="" >返回篇章架</button><span>旧事</span></div><nav class="rmt-past-tabs" aria-label="番外阅读章节"><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="draw" aria-pressed="true">旧梦引子</button><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="dossier" aria-pressed="false">前世卷宗</button><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="echoes" aria-pressed="false">今生回响</button><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="closing" aria-pressed="false">落款</button></nav><div class="rmt-past-reader"><div class="rmt-past-main"><section class="rmt-past-draw "><span class="rmt-past-seal" aria-hidden="true">旧梦引子</span><h3>旧事</h3><p>一段故事，正从熟悉的意象里醒来。</p><button type="button" class="rmt-btn" data-rmt-past-lives="draw" data-rmt-past-lives-id="" >拾起一页旧梦</button><button type="button" class="rmt-btn" data-rmt-past-lives="skip-draw" data-rmt-past-lives-id="" >直接入卷</button></section></div><aside class="rmt-past-margin" aria-label="旁批"><h3>旁批</h3><p class="rmt-past-hint">这页暂未留下旁批。</p><button type="button" class="rmt-btn" data-rmt-past-lives="read-all" data-rmt-past-lives-id="" >读完整旁批</button></aside></div></section>'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:121:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<section class="rmt-past-lives" data-rmt-past-presentation="neutral"><header class="rmt-past-head"><div><small>另一段人生 · 此刻的你我</small><h2>前世今生</h2><p>某甲、某乙、某丙某 等 4 人 与 我的番外卷宗</p></div><div class="rmt-past-actions"></div></header><div class="rmt-past-actions rmt-past-reader-back"><button type="button" class="rmt-btn" data-rmt-past-lives="library" data-rmt-past-lives-id="" >返回篇章架</button><span>旧事</span></div><nav class="rmt-past-tabs" aria-label="番外阅读章节"><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="draw" aria-pressed="true">旧梦引子</button><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="dossier" aria-pressed="false">前世卷宗</button><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="echoes" aria-pressed="false">今生回响</button><button type="button" class="rmt-btn" data-rmt-past-lives="tab" data-rmt-past-lives-id="closing" aria-pressed="false">落款</button></nav><div class="rmt-past-reader"><div class="rmt-past-main"><section class="rmt-past-draw "><span class="rmt-past-seal" aria-hidden="true">旧梦引子</span><h3>旧事</h3><p>一段故事，正从熟悉的意象里醒来。</p><button type="button" class="rmt-btn" data-rmt-past-lives="draw" data-rmt-past-lives-id="" >拾起一页旧梦</button><button type="button" class="rmt-btn" data-rmt-past-lives="skip-draw" data-rmt-past-lives-id="" >直接入卷</button></section></div><aside class="rmt-past-margin" aria-label="旁批"><h3>旁批</h3><p class="rmt-past-hint">这页暂未留下旁批。</p><button type="button" class="rmt-btn" data-rmt-past-lives="read-all" data-rmt-past-lives-id="" >读完整旁批</button></aside></div></section>',
+    expected: /<p>某戊 与 我的番外卷宗<\/p>/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-story-cast-views.mjs:133:1
+✖ song labels use historical evidence while preserving duet user, narrator and custom performer (1.278122ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '某乙 / 我'
+  - '某丙某 / 我'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:136:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '某乙 / 我',
+    expected: '某丙某 / 我',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-story-cast-views.mjs:146:1
+✖ the song library uses the same cast labels as song details (1.8983ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /<small>某丙某<\/small>/. Input:
+  
+  '<nav class="rmt-song-list" aria-label="已保存的印象曲"><button type="button" class="active" data-rmt-song="select" data-rmt-song-id="song-1" aria-current="page"><span aria-hidden="true">♪</span><span><b>雨</b><small>某甲、某乙、某丙某、某戊</small></span></button></nav>'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:152:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<nav class="rmt-song-list" aria-label="已保存的印象曲"><button type="button" class="active" data-rmt-song="select" data-rmt-song-id="song-1" aria-current="page"><span aria-hidden="true">♪</span><span><b>雨</b><small>某甲、某乙、某丙某、某戊</small></span></button></nav>',
+    expected: /<small>某丙某<\/small>/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-story-cast-views.mjs:161:1
+✖ holiday cards use nested archive context, reference priority, and clean single-name prefixes (2.099924ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /holiday-signature">某丙某<\/div>/. Input:
+  
+  '<article class="rmt-calendar-holiday-card mixed" data-medium="card" data-palette="paper" aria-label="节日贺卡">\n' +
+    '      <svg class="rmt-calendar-holiday-art" viewBox="0 0 720 420" aria-hidden="true"><rect width="720" height="420" rx="34" fill="#fffdf7"/><g opacity=".82"></g></svg>\n' +
+    '      <div class="rmt-calendar-holiday-content"><div class="rmt-calendar-holiday-message">某乙祝你平安。</div><div class="rmt-calendar-holiday-signature">某乙</div></div>\n' +
+    '      \n' +
+    '    </article>'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:164:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<article class="rmt-calendar-holiday-card mixed" data-medium="card" data-palette="paper" aria-label="节日贺卡">\n      <svg class="rmt-calendar-holiday-art" viewBox="0 0 720 420" aria-hidden="true"><rect width="720" height="420" rx="34" fill="#fffdf7"/><g opacity=".82"></g></svg>\n      <div class="rmt-calendar-holiday-content"><div class="rmt-calendar-holiday-message">某乙祝你平安。</div><div class="rmt-calendar-holiday-signature">某乙</div></div>\n      \n    </article>',
+    expected: /holiday-signature">某丙某<\/div>/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/healthcheck-story-cast-views.mjs:169:1
+✖ holiday and song live fallbacks use page selection, without adding an absent signature (2.702886ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /holiday-signature">某丙某<\/div>/. Input:
+  
+  '<article class="rmt-calendar-holiday-card mixed" data-medium="card" data-palette="paper" aria-label="节日贺卡">\n' +
+    '      <svg class="rmt-calendar-holiday-art" viewBox="0 0 720 420" aria-hidden="true"><rect width="720" height="420" rx="34" fill="#fffdf7"/><g opacity=".82"></g></svg>\n' +
+    '      <div class="rmt-calendar-holiday-content"><div class="rmt-calendar-holiday-message">愿你平安。</div><div class="rmt-calendar-holiday-signature">某甲、某乙、某丙某 等 4 人</div></div>\n' +
+    '      \n' +
+    '    </article>'
+  
+      at file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:172:16
+      at withPageChoice (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:52:16)
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-story-cast-views.mjs:171:5)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<article class="rmt-calendar-holiday-card mixed" data-medium="card" data-palette="paper" aria-label="节日贺卡">\n      <svg class="rmt-calendar-holiday-art" viewBox="0 0 720 420" aria-hidden="true"><rect width="720" height="420" rx="34" fill="#fffdf7"/><g opacity=".82"></g></svg>\n      <div class="rmt-calendar-holiday-content"><div class="rmt-calendar-holiday-message">愿你平安。</div><div class="rmt-calendar-holiday-signature">某甲、某乙、某丙某 等 4 人</div></div>\n      \n    </article>',
+    expected: /holiday-signature">某丙某<\/div>/,
+    operator: 'match',
+    diff: 'simple'
+  }

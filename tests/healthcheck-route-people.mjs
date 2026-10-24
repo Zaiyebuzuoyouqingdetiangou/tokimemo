@@ -184,19 +184,19 @@ test('explicit new work uses the page choice even while an older recovery is ret
 const castBank = memories => ({
     chatId: 'chat-A', createdAt: 1000, archiveRevision: '2000-chat-ext', characterName: '沙盒', memories,
     participantsV1: { version: 1, cardType: 'multi', selectedIds: ['p1', 'p2', 'p3', 'p4'], people: [
-        { id: 'p1', name: '林知夏', sourceRefs: [] },
-        { id: 'p2', name: '沈秋白', sourceRefs: [{ world: 'w', uid: '1', title: '沈秋白', content: '', keys: ['会长'] }] },
-        { id: 'p3', name: '顾南星', sourceRefs: [] },
-        { id: 'p4', name: '陆远舟', sourceRefs: [] },
+        { id: 'p1', name: '某甲', sourceRefs: [] },
+        { id: 'p2', name: '某乙', sourceRefs: [{ world: 'w', uid: '1', title: '某乙', content: '', keys: ['会长'] }] },
+        { id: 'p3', name: '某丙某', sourceRefs: [] },
+        { id: 'p4', name: '某戊', sourceRefs: [] },
         { id: 'u', name: '我', identity: 'user', sourceRefs: [] },
     ] },
 });
 
 test('archive strategy picks only people who actually appear in the archive memories', () => {
     const memory = castBank([
-        { id: 'M001', title: '初见', summary: '林知夏在校门口等人。', anchors: ['雨伞'], participants: ['我'] },
+        { id: 'M001', title: '初见', summary: '某甲在校门口等人。', anchors: ['雨伞'], participants: ['我'] },
         { id: 'M002', title: '训练', summary: '会长让全员跑圈。', anchors: [], participants: [] },
-        { id: 'M003', title: '雨天', summary: '两人在屋檐下躲雨。', anchors: [], participants: ['南星'] },
+        { id: 'M003', title: '雨天', summary: '两人在屋檐下躲雨。', anchors: [], participants: ['丙某'] },
     ]);
     const a = api(), s = storage();
     assert.deepEqual(a.archiveCastIds(memory.participantsV1, memory), ['p1', 'p2', 'p3'], 'name, world-info keyword and partial participant name all count; p4 never appears');
@@ -212,7 +212,7 @@ test('archive strategy follows archive updates and refuses an empty cast instead
     const empty = castBank([{ id: 'M001', title: '独白', summary: '一个人散步。', anchors: [], participants: [] }]);
     a.writeRoutePeople('butterfly', { strategy: 'archive', selectedIds: [] }, ctx, empty, s);
     assert.throws(() => a.captureRoutePeople('butterfly', ctx, empty, { storage: s }), /还没有找到/);
-    const later = castBank([...empty.memories, { id: 'M002', title: '晚会', summary: '陆远舟来帮忙。', anchors: [], participants: [] }]);
+    const later = castBank([...empty.memories, { id: 'M002', title: '晚会', summary: '某戊来帮忙。', anchors: [], participants: [] }]);
     assert.deepEqual(a.captureRoutePeople('butterfly', ctx, later, { storage: s }).people.map(p => p.id), ['p4']);
     assert.deepEqual(a.archiveCastIds(castBank([{ id: 'M1', title: '夏', summary: '一个夏天', anchors: [], participants: [] }]).participantsV1,
         castBank([{ id: 'M1', title: '夏', summary: '一个夏天', anchors: [], participants: [] }])), [], 'a single shared character does not match a name');
@@ -220,13 +220,13 @@ test('archive strategy follows archive updates and refuses an empty cast instead
 
 test('pages saved with only some of the cast stay readable, and butterfly updates follow the current cast', () => {
     const memory = castBank([]);
-    assert.equal(people.storyOwnerLabelAllowed('林知夏', memory), true, 'one chosen person');
-    assert.equal(people.storyOwnerLabelAllowed('林知夏、顾南星', memory), true, 'a chosen subset');
-    assert.equal(people.storyOwnerLabelAllowed('林知夏、沈秋白、顾南星、陆远舟', memory), true, 'the whole cast');
+    assert.equal(people.storyOwnerLabelAllowed('某甲', memory), true, 'one chosen person');
+    assert.equal(people.storyOwnerLabelAllowed('某甲、某丙某', memory), true, 'a chosen subset');
+    assert.equal(people.storyOwnerLabelAllowed('某甲、某乙、某丙某、某戊', memory), true, 'the whole cast');
     assert.equal(people.storyOwnerLabelAllowed('沙盒', memory), true, 'the card name');
-    assert.equal(people.storyOwnerLabelAllowed('林知夏、外人', memory), false, 'someone outside the roster');
+    assert.equal(people.storyOwnerLabelAllowed('某甲、外人', memory), false, 'someone outside the roster');
     assert.equal(people.storyOwnerLabelAllowed('我', memory), false, 'the user is not an owner');
-    assert.equal(people.storyOwnerLabelAllowed('林知夏、林知夏', memory), false);
+    assert.equal(people.storyOwnerLabelAllowed('某甲、某甲', memory), false);
     const butterfly = readFileSync(`${root}/src/modes/butterfly.js`, 'utf8');
     assert.equal((butterfly.match(/mergeButterflyIncremental\([^)]*\)?[^;]*butterflySubjectName\(memoryBank, context\)\)/g) || []).length, 2, 'both update paths pass the current cast');
     assert.match(butterfly, /\.\.\.\(subject \? \{ subject \} : \{\}\)/);
@@ -247,14 +247,14 @@ test('butterfly headers name the people in that branch, not the whole roster', (
     const body = source.slice(source.indexOf('function pageCast'), source.indexOf('export function renderButterfly'));
     const nodeSubjectName = Function('core_participants', 'route_people', `${body}\nreturn nodeSubjectName;`)(people, api());
     const memory = castBank([
-        { id: 'M001', title: '雨天', summary: '两人在屋檐下躲雨。', anchors: [], participants: ['顾南星', '我'] },
+        { id: 'M001', title: '雨天', summary: '两人在屋檐下躲雨。', anchors: [], participants: ['某丙某', '我'] },
         { id: 'M002', title: '训练', summary: '会长让全员跑圈。', anchors: [], participants: [] },
     ]);
-    const session = { subject: '林知夏、沈秋白、顾南星、陆远舟' };
-    assert.equal(nodeSubjectName({ sourceMemoryIds: ['M001'], monologue: '' }, session, memory), '顾南星', 'from the referenced memory');
-    assert.equal(nodeSubjectName({ sourceMemoryIds: ['M002'], monologue: '' }, session, memory), '沈秋白', 'world-info keyword in the referenced memory');
-    assert.equal(nodeSubjectName({ sourceMemoryIds: [], intervention: '陆远舟终于开口。' }, session, memory), '陆远舟', 'from the branch text');
-    assert.equal(nodeSubjectName({ sourceMemoryIds: [], intervention: '没有人名。' }, session, memory), '林知夏、沈秋白、顾南星 等 4 人', 'falls back to the page cast, compacted');
+    const session = { subject: '某甲、某乙、某丙某、某戊' };
+    assert.equal(nodeSubjectName({ sourceMemoryIds: ['M001'], monologue: '' }, session, memory), '某丙某', 'from the referenced memory');
+    assert.equal(nodeSubjectName({ sourceMemoryIds: ['M002'], monologue: '' }, session, memory), '某乙', 'world-info keyword in the referenced memory');
+    assert.equal(nodeSubjectName({ sourceMemoryIds: [], intervention: '某戊终于开口。' }, session, memory), '某戊', 'from the branch text');
+    assert.equal(nodeSubjectName({ sourceMemoryIds: [], intervention: '没有人名。' }, session, memory), '某甲、某乙、某丙某 等 4 人', 'falls back to the page cast, compacted');
     assert.equal(nodeSubjectName({ intervention: 'x' }, { subject: '单人' }, { memories: [] }), '单人', 'single-character cards are unchanged');
 });
 
@@ -262,11 +262,11 @@ test('world-info style names like 「角色:某某」 are matched and shown with
     const memory = { memories: [{ id: 'M1', title: '来信', summary: '某甲写信给你。', anchors: [], participants: [] }],
         participantsV1: { version: 1, cardType: 'multi', selectedIds: ['a', 'b', 'c', 'd'], people: [
             { id: 'a', name: '角色:某甲', sourceRefs: [] }, { id: 'b', name: '角色：某乙', sourceRefs: [] },
-            { id: 'c', name: '角色:某丙', sourceRefs: [] }, { id: 'd', name: '角色:某丁', sourceRefs: [] }] } };
+            { id: 'c', name: '角色:某丙某', sourceRefs: [] }, { id: 'd', name: '角色:某丁', sourceRefs: [] }] } };
     const a = api();
-    assert.equal(a.storyCastLabel(memory, { sourceMemoryIds: ['M1'], fallback: '角色:某甲、角色：某乙、角色:某丙、角色:某丁' }), '某甲');
+    assert.equal(a.storyCastLabel(memory, { sourceMemoryIds: ['M1'], fallback: '角色:某甲、角色：某乙、角色:某丙某、角色:某丁' }), '某甲');
     assert.equal(a.storyCastLabel(memory, { text: '某乙来了', fallback: [] }), '某乙');
-    assert.equal(a.storyCastLabel(memory, { text: '无名', fallback: ['角色:某甲', '角色：某乙', '角色:某丙', '角色:某丁'] }), '某甲、某乙、某丙 等 4 人');
+    assert.equal(a.storyCastLabel(memory, { text: '无名', fallback: ['角色:某甲', '角色：某乙', '角色:某丙某', '角色:某丁'] }), '某甲、某乙、某丙某 等 4 人');
     for (const file of ['src/ui/inboxView.js', 'src/ui/timeStoriesView.js', 'src/ui/pastLivesView.js', 'src/ui/themeSongView.js', 'src/ui/calendarView.js', 'src/ui/butterflyView.js']) {
         assert.match(readFileSync(`${root}/${file}`, 'utf8'), /storyCastLabel\(/, file);
     }
@@ -276,8 +276,8 @@ test('butterfly falls back to the page choice (specified or archive cast), not t
     const source = readFileSync(`${root}/src/ui/butterflyView.js`, 'utf8');
     const body = source.slice(source.indexOf('function pageCast'), source.indexOf('export function renderButterfly'));
     const a = api(), s = storage();
-    const memory = castBank([{ id: 'M001', title: '雨天', summary: '顾南星在屋檐下躲雨。', anchors: [], participants: [] }]);
-    const stored = '林知夏、沈秋白、顾南星、陆远舟';
+    const memory = castBank([{ id: 'M001', title: '雨天', summary: '某丙某在屋檐下躲雨。', anchors: [], participants: [] }]);
+    const stored = '某甲、某乙、某丙某、某戊';
     const run = () => {
         globalThis.localStorage = s;
         try { return Function('core_participants', 'route_people', `${body}\nreturn nodeSubjectName;`)(people, a); }
@@ -287,10 +287,10 @@ test('butterfly falls back to the page choice (specified or archive cast), not t
     globalThis.localStorage = s;
     const name = run();
     globalThis.localStorage = s;
-    assert.equal(name({ trueEnding: true, intervention: '没有人名。' }, { subject: stored }, memory, ctx), '林知夏', 'Ω uses the chosen person');
-    assert.equal(name({ sourceMemoryIds: [], intervention: '没有人名。' }, { subject: stored }, memory, ctx), '林知夏');
+    assert.equal(name({ trueEnding: true, intervention: '没有人名。' }, { subject: stored }, memory, ctx), '某甲', 'Ω uses the chosen person');
+    assert.equal(name({ sourceMemoryIds: [], intervention: '没有人名。' }, { subject: stored }, memory, ctx), '某甲');
     a.writeRoutePeople('butterfly', { strategy: 'archive', selectedIds: [] }, ctx, memory, s);
-    assert.equal(name({ trueEnding: true, intervention: 'x' }, { subject: stored }, memory, ctx), '顾南星', 'archive cast');
+    assert.equal(name({ trueEnding: true, intervention: 'x' }, { subject: stored }, memory, ctx), '某丙某', 'archive cast');
     delete globalThis.localStorage;
 });
 
@@ -324,4 +324,89 @@ test('aliases are the same person: kept in the roster, used to spot appearances,
     assert.match(lines, /不是另一个人/);
     assert.match(people.participantPromptBlock(normalized), /不要把化名和真名写成两个人/);
     assert.throws(() => people.normalizeParticipantRoster({ ...roster, people: [{ id: 'x', name: 'x', aliases: 'bad', sourceRefs: [] }], selectedIds: [] }));
+});
+
+test('explicit memory participants are not expanded by a future visit or an absent person mentioned in prose', () => {
+    const a = api();
+    for (const summary of ['某甲计划下周去拜访某乙。', '某甲独自回家，某乙尚未登场。', '某甲说起了某丙某。']) {
+        const memory = castBank([{ id: 'M001', title: '今日', summary, participants: ['某甲'], anchors: [] }]);
+        assert.deepEqual(a.archiveCastIds(memory.participantsV1, memory), ['p1'], summary);
+        assert.equal(a.storyCastLabel(memory, { sourceMemoryIds: ['M001'] }), '某甲');
+    }
+});
+
+test('appearance evidence is resolved per memory, so a later actual encounter still adds the person', () => {
+    const memory = castBank([
+        { id: 'M001', summary: '某甲计划去拜访某乙。', participants: ['某甲'] },
+        { id: 'M002', summary: '某乙在门口等我。', participants: ['某乙'] },
+    ]);
+    assert.deepEqual(api().archiveCastIds(memory.participantsV1, memory), ['p1', 'p2']);
+});
+
+test('legacy memories without usable participants need an actual appearance, not a mention, plan or negation', () => {
+    for (const summary of ['听说某乙是个剑客。', '我准备下周去拜访某乙。', '某乙尚未登场。', '如果某乙来了就好了。', '我想起了某丙某。', '我梦见某乙走进来。']) {
+        const memory = castBank([{ id: 'M001', title: '某乙的传闻', summary, anchors: ['某乙'], participants: [] }]);
+        assert.deepEqual(api().archiveCastIds(memory.participantsV1, memory), [], summary);
+    }
+});
+
+test('legacy actual encounters, aliases and incomplete user-only participant lists remain usable', () => {
+    const memory = castBank([
+        { id: 'M001', summary: '某甲在校门口等人。', participants: ['我'] },
+        { id: 'M002', summary: '我在门口见到了某乙。', participants: [] },
+        { id: 'M003', summary: '某丙某和某戊一起走进茶楼。', participants: [] },
+    ]);
+    assert.deepEqual(api().archiveCastIds(memory.participantsV1, memory), ['p1', 'p2', 'p3', 'p4']);
+});
+
+test('an ambiguous short participant name cannot silently select several people', () => {
+    const memory = castBank([{ id: 'M001', summary: '两人在窗边聊天。', participants: ['丙某'] }]);
+    memory.participantsV1.people.push({ id: 'other', name: '丁丙某', sourceRefs: [] });
+    assert.deepEqual(api().archiveCastIds(memory.participantsV1, memory), []);
+});
+
+test('display-only prose name matching is separate from actual archive appearance selection', () => {
+    const memory = castBank([]);
+    assert.equal(api().storyCastLabel(memory, { text: '写给某丙某', fallback: '某甲、某乙' }), '某丙某');
+});
+
+test('display fallback uses this page selection, but a historical reader never borrows the live choice', () => {
+    const a = api(), s = storage(), memory = castBank([]);
+    const fallbackApi = sourceModule('src/core/routeParticipants.js', { contextApi, repository: {}, participants: people, generation, composer }, ['storyCastFallback']);
+    a.writeRoutePeople('inbox', { strategy: 'specified', selectedIds: ['p3'] }, ctx, memory, s);
+    const saved = '某甲、某乙、某丙某、某戊';
+    assert.equal(fallbackApi.storyCastFallback('inbox', ctx, memory, saved, { storage: s }), '某丙某');
+    assert.equal(fallbackApi.storyCastFallback('inbox', ctx, memory, saved, { historical: true, storage: s }), '某甲、某乙、某丙某 等 4 人');
+});
+
+test('legacy appearance keeps future, quoted hypothetical and negated encounter scope across commas', () => {
+    for (const [summary, expected] of [
+        ['明天，某乙来访。', []],
+        ['如果明天有空，某乙在茶楼等你。', []],
+        ['我没有在门口见到某乙。', []],
+        ['某乙来吗？', []],
+        ['我担心某乙受伤。', []],
+        ['据说某乙在茶楼等人。', []],
+        ['某甲说：“如果有空，某乙来访就好了。”', ['p1']],
+        ['某甲说某乙明天会来。随后某乙推门进来了。', ['p1', 'p2']],
+    ]) {
+        const memory = castBank([{ id: 'M001', summary, participants: [] }]);
+        assert.deepEqual(api().archiveCastIds(memory.participantsV1, memory), expected, summary);
+    }
+});
+
+test('actual legacy actions do not require a whitelist of verbs and a partial participant list can be supplemented', () => {
+    for (const [summary, named, expected] of [
+        ['某乙击退了刺客。', [], ['p2']],
+        ['某乙修好了门锁。', [], ['p2']],
+        ['某乙沉默不语。', [], ['p2']],
+        ['某乙没有去赴约，留在店里陪我喝茶。', [], ['p2']],
+        ['某甲放下明天的行程表后见到了某乙。', [], ['p1', 'p2']],
+        ['某甲听完计划后看见某乙。', [], ['p1', 'p2']],
+        ['某甲站在门口。某乙击退了刺客。', ['某甲'], ['p1', 'p2']],
+        ['某甲站在门口，某乙尚未登场。', ['某甲'], ['p1']],
+    ]) {
+        const memory = castBank([{ id: 'M001', summary, participants: named }]);
+        assert.deepEqual(api().archiveCastIds(memory.participantsV1, memory), expected, summary);
+    }
 });

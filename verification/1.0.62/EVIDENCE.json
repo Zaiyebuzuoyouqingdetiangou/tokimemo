@@ -1,0 +1,89 @@
+{
+  "version": "1.0.62",
+  "audited_baselines": {
+    "main": "d000fe4429f344aeaec9257d908e359e8e8fcd65",
+    "test": "000c9e60016f2f8054036d41e3a9d30202d2bce1",
+    "Koori": "8df14ec4c924e0e6a0ad18a563de819afb180cad"
+  },
+  "scope": [
+    "Actual appearance evidence with compatibility for old incomplete participant lists",
+    "Complete long-entry scans with accurate pre-confirmation batch counts",
+    "Unambiguous name/alias identity merging",
+    "Scan origin and cancellation ownership isolation, including late cleanup",
+    "History, nested past-life references, page fallbacks, song-list and single-name labels"
+  ],
+  "verification": {
+    "complete_suite": {
+      "command": "python3 tools/verification/run-tests.py",
+      "tests": 203,
+      "passed": 203,
+      "failed": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "baseline_tests": 169,
+      "new_tests": 34,
+      "log": "regression.log"
+    },
+    "focused_scan_picker": {
+      "command": "node --test tests/healthcheck-cast-scan.mjs tests/healthcheck-participant-picker.mjs",
+      "tests": 17,
+      "passed": 17
+    },
+    "rebuild": "python3 tools/verification/build.py . --sync-release-notes; then --check; full suite independently builds twice to temporary files and compares bytes",
+    "version_identity": "manifest, index, runtime and selfUpdater checked",
+    "red_green": [
+      {
+        "case": "historical and per-page labels",
+        "result": "new tests run against pinned r12 sources: 0/10 passed; candidate: 10/10",
+        "log": "labels-baseline-failure.log"
+      },
+      {
+        "case": "old scan cleanup detaches a replacement scan listener",
+        "result": "new regression failed before fix; passed after fix for both late resolve and reject",
+        "log": "cancel-cleanup-before-fix.log"
+      }
+    ],
+    "production_diff": "git diff --check passed; existing tests retained",
+    "koori_preservation": "Original localArchive, localArchiveAuto, settings, heartbeatMemories, overlayClickActions and overlayCore are unchanged versus Koori HEAD. All other common source files match standard except the selfUpdater build identity.",
+    "review": "Separate scoped reviewers checked appearance and scan/alias/cancellation paths. Issues found were reproduced and corrected; not a repository-wide security scan."
+  },
+  "packaging": {
+    "root": "tokimemo-main/",
+    "filename": "hearttrace-upload.zip",
+    "file_hash_inventory": "FILE-MANIFEST.json",
+    "exclusions": [
+      ".git",
+      ".github",
+      "__pycache__",
+      "legacy #Uxxxx filename duplicates"
+    ],
+    "final_zip": "CRC, SHA-256, path/root checks and full tests are repeated from freshly extracted final packages; ZIP self-hash is not embedded in itself."
+  },
+  "limitations": [
+    "Legacy free-text appearance inference is heuristic; it cannot guarantee arbitrary natural-language interpretation or repair inaccurate existing participant records.",
+    "No real model/provider requests, Chromium/host DOM, native IndexedDB, TT, iPhone or co-installed SillyTavern tests were executed.",
+    "Abort requests are sent locally; actual provider billing or cancellation cannot be guaranteed by these mocked tests.",
+    "Full scans can use more explicitly confirmed batches than the old truncated scans. No unconfirmed automatic requests or new generation limits were added.",
+    "TT sticker persistence acknowledgement remains a device-verification item; save logic was not changed in this patch."
+  ],
+  "remote_writes": {
+    "commits": false,
+    "pushes": false,
+    "branches": false,
+    "pull_requests": false,
+    "releases": false
+  },
+  "data_preservation": "No rewrite or migration of existing archives, settings snapshots or generated content; no deletion of original packages.",
+  "edition": "standard",
+  "build": "1.0.62-r1",
+  "bundle": {
+    "bundle_sha256": "f99606998376474c78b59ef76aa1043d9107c791ab7efa8762ffaa13323a4e39",
+    "modules": 364,
+    "source_sha256": "afe168754c85588b973f7980aa8f28113d991013a61d374ede65c227c5b762f5"
+  },
+  "syntax": {
+    "method": "vm.SourceTextModule parse of all JS/MJS files",
+    "files": 424,
+    "result": "passed"
+  }
+}

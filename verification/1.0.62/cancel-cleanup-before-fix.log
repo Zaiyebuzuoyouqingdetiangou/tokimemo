@@ -1,0 +1,38 @@
+✔ declining scan confirmation performs no model requests; local guessing remains free (9.338179ms)
+✔ confirmation counts complete long-entry batches, including the final named character (3.11927ms)
+✔ switching books aborts an in-flight scan and cannot bind its late names to another book UID (3.156025ms)
+✖ late cleanup from a cancelled scan cannot detach the replacement scan close listener (1.594482ms)
+✔ duplicate scan clicks share one confirmed request rather than starting a second paid job (1.26828ms)
+✔ a scanned alias augments the existing named person and keeps their original ID (1.523485ms)
+✔ an ambiguous alias stays pending for correction instead of creating or merging the wrong person (0.986816ms)
+✔ candidate insertion order cannot merge two people who share an ambiguous alias (1.673782ms)
+✔ a known alias owner participates in disambiguating new model candidates before they are merged (0.900237ms)
+✔ closing or changing chats aborts the active request and prevents the remaining batches (2.797164ms)
+✔ local guessing supersedes a pending model scan without accepting its late result (1.054819ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 10
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 106.433835
+
+✖ failing tests:
+
+test at tests/healthcheck-participant-picker.mjs:106:1
+✖ late cleanup from a cancelled scan cannot detach the replacement scan close listener (1.594482ms)
+  AssertionError [ERR_ASSERTION]: closing still aborts the replacement scan after resolve
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/6ca743277155/tokimemo-fix-1.0.62/tests/healthcheck-participant-picker.mjs:119:16)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

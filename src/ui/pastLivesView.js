@@ -36,8 +36,17 @@ export function pastLivesHtml(value, { readOnly = false, busy = false, notice = 
         if (partial && !notice) notice = '未完成 · 已生成的引子、卷宗和回响已保留，后续内容仍待续生成。';
         const labels = contract.pastLivesLabels(selected?.presentation || session.presentation);
         // 多人卡：这一篇写的是谁就显示谁，不把整份名单列出来。
-        const castName = route_people.storyCastLabel((() => { try { return repository.getImportedMemory(contextApi.getContext()); } catch { return null; } })(), { sourceMemoryIds: selected?.sourceMemoryIds,
-            text: selected ? JSON.stringify([selected.title, selected.opening, selected.closing?.text]) : '', fallback: session.characterName });
+        const snapshot = runtimeState.activeArchiveSnapshot;
+        let context = null, memory = snapshot?.memory || null;
+        if (!snapshot) { try { context = contextApi.getContext(); memory = repository.getImportedMemory(context); } catch { /* 保留原署名。 */ } }
+        const sourceMemoryIds = [selected, selected?.opening, ...(selected?.echoes || [])]
+            .flatMap(item => Array.isArray(item?.sourceMemoryIds) ? item.sourceMemoryIds : []);
+        const prose = selected ? [selected.title, selected.opening?.title, selected.opening?.motif, selected.opening?.text, selected.closing?.text,
+            ...(selected.dossiers || []).flatMap(item => [item.title, item.synopsis, ...(item.clues || []).flatMap(clue => [clue.title, clue.text, clue.revealedText])]),
+            ...(selected.echoes || []).flatMap(item => [item.title, item.text, item.reflection]),
+            ...(selected.annotations || []).map(item => item.text)].filter(value => typeof value === 'string').join('\n') : '';
+        const castName = route_people.storyCastLabel(memory, { sourceMemoryIds, text: prose,
+            fallback: route_people.storyCastFallback(MODE, context, memory, session.characterName, { historical: !!snapshot }) });
         const generate = readOnly ? '' : button('generate', busy ? '正在续写篇章…' : session.episodes.length ? '再写一篇番外' : '写下第一篇番外', '', busy ? 'disabled' : '');
         const header = `<header class="rmt-past-head"><div><small>另一段人生 · 此刻的你我</small><h2>前世今生</h2><p>${esc(castName || '角色')} 与 ${esc(session.userName || '你')}的番外卷宗</p></div><div class="rmt-past-actions">${generate}</div></header>`;
         const boundary = ''; // r84.172：去掉出戏的说明文字。

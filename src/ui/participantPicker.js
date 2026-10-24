@@ -126,6 +126,7 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
     current.entries = [];
     current.loading = 0;
     current.busy = false;
+    current.scan = null;
     const selected = id => draft.selectedIds.includes(id);
     const setSelected = (id, checked) => {
         draft.selectedIds = checked ? [...new Set([...draft.selectedIds, id])] : draft.selectedIds.filter(value => value !== id);
@@ -163,20 +164,31 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
     function renderFound() {
         const node = current.element.querySelector('[data-rmt-participant-found]');
         if (!current.found.length) { node.innerHTML = ''; return; }
-        const titles = uids => uids.map(uid => current.entries.find(entry => String(entry.uid) === uid)?.title).filter(Boolean);
         node.innerHTML = `<p>找到 ${current.found.length} 个可能的人物，勾选要加入的：</p>`
-            + current.found.map((row, index) => `<label class="rmt-participant-select"><input type="checkbox" data-rmt-participant-found-pick="${index}" ${row.checked ? 'checked' : ''}><b>${text.esc(row.name)}</b><small>${row.note ? text.esc(row.note) + ' · ' : ''}${row.aliases?.length ? '又名 ' + text.esc(row.aliases.join('、')) + ' · ' : ''}条目：${text.esc(titles(row.entryUids).join('、'))}</small></label>`).join('')
+            + current.found.map((row, index) => `<label class="rmt-participant-select"><input type="checkbox" data-rmt-participant-found-pick="${index}" ${row.checked ? 'checked' : ''}><b>${text.esc(row.name)}</b><small>${row.note ? text.esc(row.note) + ' · ' : ''}${row.aliases?.length ? '又名 ' + text.esc(row.aliases.join('、')) + ' · ' : ''}条目：${text.esc(row.sourceRefs.map(ref => ref.title).join('、'))}${cast_scan.castIdentityMatches(row, draft.people).length > 1 ? ' · 姓名／化名对应多人，请先核对名单' : ''}</small></label>`).join('')
             + '<div class="rmt-participant-actions"><button type="button" class="rmt-btn" data-rmt-participant-found-all>全选／全不选</button><button type="button" class="rmt-btn" data-rmt-participant-found-add>加入勾选的人物</button><button type="button" class="rmt-btn" data-rmt-participant-found-clear>收起</button></div>';
+    }
+    function foundRows(lists, entries) {
+        return cast_scan.mergeCastScan(lists, draft.people).map(row => ({ ...row,
+            sourceRefs: entries.filter(entry => row.entryUids.includes(String(entry.uid))).map(copySource),
+            checked: cast_scan.castIdentityMatches(row, draft.people).length === 0 }));
     }
     function addFound() {
         let added = 0, merged = 0;
+        const unresolved = [];
+        const existingPeople = [...draft.people];
+        const newCandidates = current.found.filter(row => cast_scan.castIdentityMatches(row, existingPeople).length === 0);
         for (const row of current.found.filter(item => item.checked)) {
-            const refs = current.entries.filter(entry => row.entryUids.includes(String(entry.uid)));
-            const plain = people.plainPersonName(row.name);
-            const existing = draft.people.find(person => people.plainPersonName(person.name) === plain);
+            // 候选保留扫描时完整来源，绝不拿当前世界书里恰好同 uid 的条目补配。
+            const refs = row.sourceRefs;
+            const matches = cast_scan.castIdentityMatches(row, existingPeople);
+            if (cast_scan.castIdentityMatches(row, [...existingPeople, ...newCandidates.filter(other => other !== row)]).length > 1) {
+                unresolved.push(row); continue;
+            }
+            const existing = matches[0];
             if (existing) {
                 for (const entry of refs) if (!existing.sourceRefs.some(ref => sourceKey(ref) === sourceKey(entry))) existing.sourceRefs.push(copySource(entry));
-                const aliases = people.normalizeAliases([...(existing.aliases || []), ...(row.aliases || [])], existing.name);
+                const aliases = people.normalizeAliases([...(existing.aliases || []), row.name, ...(row.aliases || [])], existing.name);
                 if (aliases.length) existing.aliases = aliases;
                 setSelected(existing.id, true); merged += 1;
             } else {
@@ -186,41 +198,76 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
                 added += 1;
             }
         }
-        current.found = [];
+        current.found = unresolved;
         changed();
         renderFound();
-        status(current, `已加入 ${added} 人${merged ? `，${merged} 人已在名单里，补上了条目` : ''}。确认前仍可改名或取消勾选。`);
+        status(current, `已加入 ${added} 人${merged ? `，${merged} 人已在名单里，补上了条目` : ''}。${unresolved.length ? '姓名／化名对应多人的候选仍保留，请先核对名单再加入。' : '确认前仍可改名或取消勾选。'}`, unresolved.length > 0);
+    }
+    function cancelScan() {
+        const job = current.scan;
+        if (!job) return;
+        current.scan = null;
+        job.controller.abort();
+        job.cleanup();
+        if (job.button.isConnected && !current.busy) job.button.disabled = false;
     }
     async function scanWithModel(button) {
-        const batches = cast_scan.castScanBatches(current.entries);
+        if (current.scan) return;
+        const entries = current.entries.map(copySource), serial = current.loading;
+        const batches = cast_scan.castScanBatches(entries);
         if (!batches.length) { status(current, '这本世界书没有可读取的文字条目。', true); return; }
-        if (!globalThis.confirm?.(`用当前的生成 API 扫描整本世界书找人物：共 ${current.entries.length} 个条目，分 ${batches.length} 次请求。会消耗额度，继续吗？`)) return;
+        if (!globalThis.confirm?.(`用当前的生成 API 扫描整本世界书找人物：共 ${entries.length} 个条目，分 ${batches.length} 次请求。会消耗额度，继续吗？`)) return;
+        if (!current.isCurrent() || serial !== current.loading) return;
+        const controller = new AbortController(), source = context.eventSource;
+        const types = context.eventTypes || context.event_types || {};
+        const events = [...new Set([types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean))];
+        const cancelJob = () => { if (current.scan === job) cancelScan(); };
+        const onChat = () => { if (!current.isCurrent()) cancelJob(); };
+        let cleaned = false;
+        const job = { controller, button, cleanup: () => {
+            if (cleaned) return;
+            cleaned = true;
+            current.controller.signal.removeEventListener('abort', cancelJob);
+            for (const type of events) source?.off?.(type, onChat);
+        } };
+        current.scan = job;
+        current.controller.signal.addEventListener('abort', cancelJob, { once: true });
+        for (const type of events) source?.on?.(type, onChat);
+        const isCurrent = () => current.isCurrent() && current.scan === job && !controller.signal.aborted && serial === current.loading;
         button.disabled = true;
+        current.found = []; renderFound();
         const lists = [];
         try {
+            const origin = contextApi.captureTaskOrigin(context);
             for (const [index, batch] of batches.entries()) {
-                if (!current.isCurrent()) return;
+                if (!isCurrent()) return;
                 status(current, `正在扫描人物… ${index + 1} / ${batches.length}`);
                 const data = await generation_client.requestJson(cast_scan.castScanPrompt(batch), '正在从世界书里找人物…', {
-                    mode: 'participantScan', context, origin: contextApi.captureTaskOrigin(context), signal: current.controller.signal,
+                    mode: 'participantScan', context, origin, signal: controller.signal,
                     taskKey: `participant-scan:${Date.now()}:${index}`, contextEnvelope: '', temperatureCeiling: 0.2,
                     enforceGeneratedPhrasePolicy: false, recoveryContentSettings: { creativeSupplementEnabled: false },
                 });
+                if (!isCurrent()) return;
                 lists.push(cast_scan.normalizeCastScan(data, batch));
             }
-            if (!current.isCurrent()) return;
-            const known = new Set(draft.people.map(person => people.plainPersonName(person.name)));
-            current.found = cast_scan.mergeCastScan(lists).map(row => ({ ...row, checked: !known.has(row.name) }));
+            if (!isCurrent()) return;
+            current.found = foundRows(lists, entries);
             renderFound();
             status(current, current.found.length ? '扫描完成。已在名单里的人默认不勾，勾上会给他补上条目。' : '没有扫描到人物。');
         } catch (error) {
-            if (!current.isCurrent()) return;
+            if (!isCurrent()) return;
             if (lists.length) {
-                current.found = cast_scan.mergeCastScan(lists).map(row => ({ ...row, checked: true }));
+                current.found = foundRows(lists, entries);
                 renderFound();
             }
             status(current, `扫描没有完成：${text.safeErrorSummary(error)}${lists.length ? '。已扫描的部分列在下面。' : ''}`, true);
-        } finally { if (button.isConnected) button.disabled = false; }
+        } finally {
+            job.cleanup();
+            if (current.scan === job) {
+                current.scan = null;
+                if (button.isConnected && !current.busy) button.disabled = false;
+            }
+        }
     }
     function changed({ entries = true } = {}) { renderPeople(); if (entries) renderEntries(); status(current, ''); }
     current.element.addEventListener('input', event => {
@@ -276,14 +323,15 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
         }
         if (button.hasAttribute('data-rmt-participant-found-clear')) { current.found = []; renderFound(); return; }
         if (button.hasAttribute('data-rmt-participant-guess')) {
+            cancelScan();
+            const entries = current.entries.map(copySource);
             const byName = new Map();
-            for (const entry of current.entries) for (const name of cast_scan.guessEntryPeople(entry)) {
+            for (const entry of entries) for (const name of cast_scan.guessEntryPeople(entry)) {
                 const row = byName.get(name) || { name, aliases: [], entryUids: [], note: '', checked: false };
                 if (!row.entryUids.includes(String(entry.uid))) row.entryUids.push(String(entry.uid));
                 byName.set(name, row);
             }
-            const known = new Set(draft.people.map(person => people.plainPersonName(person.name)));
-            current.found = [...byName.values()].filter(row => !known.has(row.name));
+            current.found = foundRows([[...byName.values()]], entries).filter(row => cast_scan.castIdentityMatches(row, draft.people).length !== 1).map(row => ({ ...row, checked: false }));
             renderFound();
             status(current, current.found.length ? '这是按文字格式猜的，可能混进不是人名的词，请只勾真正的人物。' : '没有从条目里找到新的人名，可以试试用模型扫描，或手动补充。');
             return;
@@ -312,7 +360,10 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
         event.stopPropagation();
         if (!current.isCurrent() || current.busy) return;
         const serial = ++current.loading, world = event.target.value;
-        if (!world) { current.entries = []; current.element.querySelector('[data-rmt-participant-entries]').textContent = ''; return; }
+        cancelScan();
+        current.entries = []; current.found = []; renderFound();
+        current.element.querySelector('[data-rmt-participant-scan-box]').hidden = true;
+        if (!world) { current.element.querySelector('[data-rmt-participant-entries]').textContent = ''; return; }
         current.element.querySelector('[data-rmt-participant-entries]').textContent = '正在读取条目…';
         try {
             const entries = await repository.loadMemoryWorldInfoBook(context, world, current.controller.signal, { participantSource: true });
@@ -330,6 +381,7 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
             status(current, '请先勾选要加入回廊的人物，再开始建档。', true); return;
         }
         const snapshot = people.normalizeParticipantRoster(draft);
+        cancelScan();
         current.busy = true;
         for (const field of current.element.querySelectorAll('button:not([data-rmt-participant-close]), input, select')) field.disabled = true;
         status(current, '正在确认人物选择…');
