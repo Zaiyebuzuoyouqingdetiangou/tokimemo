@@ -119,6 +119,8 @@ function castTerms(person, roster) {
     add(participants.plainPersonName(person.name));
     for (const part of participants.plainPersonName(person.name).split(/[·・•\s/()（）「」【】]+/)) add(part);
     for (const keyword of trustedKeywords(person, roster)) add(keyword);
+    // 用户确认过的化名、外号也算这个人。
+    for (const alias of person.aliases || []) add(alias);
     return [...terms];
 }
 function memoryCastText(item) {
