@@ -14,7 +14,7 @@ function storage() {
         getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
 }
 const contextApi = { currentCharacterRuntimeKey: ctx => `${ctx.avatar}|slot:${ctx.characterId}` };
-const people = sourceModule('src/core/participants.js', {}, ['PARTICIPANTS_KEY', 'normalizeParticipantRoster', 'normalizeParticipantSnapshot', 'selectedParticipantSnapshot', 'resolveStoryIdentities', 'storyOwnerLabelAllowed', 'compactCastLabel', 'plainPersonName']);
+const people = sourceModule('src/core/participants.js', {}, ['PARTICIPANTS_KEY', 'normalizeParticipantRoster', 'normalizeParticipantSnapshot', 'selectedParticipantSnapshot', 'resolveStoryIdentities', 'storyOwnerLabelAllowed', 'compactCastLabel', 'plainPersonName', 'normalizeAliases', 'promptIdentityLines', 'participantPromptBlock']);
 const generation = sourceModule('src/core/generationParticipants.js', { participants: people }, ['resolveGenerationParticipantSnapshot', 'deriveGenerationParticipantMemoryBank']);
 const composer = sourceModule('src/core/generationOptions.js', { contextApi, repository: {} }, ['composerScope']);
 function api() {
@@ -307,4 +307,21 @@ test('keywords of an entry shared by several NPCs (a faction entry) do not mark 
     assert.deepEqual(cast('一行人到了西南，见到许多教众。'), [], 'shared faction keywords alone name nobody');
     assert.deepEqual(cast('乙长老在西南拦路。'), ['b'], 'the name itself still counts');
     assert.deepEqual(cast('阿甲来了。'), ['a'], 'keywords of a single-person entry titled with the name still count');
+});
+
+test('aliases are the same person: kept in the roster, used to spot appearances, and explained in prompts', () => {
+    const roster = { version: 1, cardType: 'multi', selectedIds: ['a', 'b'], people: [
+        { id: 'a', name: '甲某', aliases: ['化名乙', '甲某', ' ', '化名乙', '阿甲'], sourceRefs: [] },
+        { id: 'b', name: '丙某', sourceRefs: [] },
+    ] };
+    const normalized = people.normalizeParticipantRoster(roster);
+    assert.deepEqual(normalized.people[0].aliases, ['化名乙', '阿甲'], 'own name, blanks and duplicates dropped');
+    assert.equal('aliases' in normalized.people[1], false, 'no empty field on people without aliases');
+    const a = api();
+    assert.deepEqual(a.archiveCastIds(normalized, { memories: [{ id: 'M1', title: '', summary: '化名乙在茶楼听曲。', anchors: [], participants: [] }] }), ['a']);
+    const lines = people.promptIdentityLines({ name2: '卡', name1: '我' }, null, { participantsV1: normalized });
+    assert.match(lines, /甲某（化名／外号：化名乙、阿甲）/);
+    assert.match(lines, /不是另一个人/);
+    assert.match(people.participantPromptBlock(normalized), /不要把化名和真名写成两个人/);
+    assert.throws(() => people.normalizeParticipantRoster({ ...roster, people: [{ id: 'x', name: 'x', aliases: 'bad', sourceRefs: [] }], selectedIds: [] }));
 });
