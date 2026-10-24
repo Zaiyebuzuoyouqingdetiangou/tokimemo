@@ -9,6 +9,7 @@ import * as modes_travel from '../modes/travel.js';
 import * as ui_overlay from './overlay.js';
 import * as repository from '../archive/repository.js';
 import * as route_people from '../core/routeParticipants.js';
+import * as people from '../core/participants.js';
 
 export function selectedTravelLocation() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.TRAVEL) return null;
@@ -459,19 +460,30 @@ function travelKeepsakeHtml(item, session) {
     </section>`;
 }
 
-// 多人卡：这一站说话的是谁就写谁，不显示角色卡名。
+// 多人卡：说话人以生成时写明的 speaker 为准；旧站只按引用的档案记忆认一人。
+// 地名、简介和对白里提到的人不是说话人（「越前家」「老头子」都不代表他在说话）。
 export function travelSpeakerLabel(item, lines = []) {
     const snapshot = runtimeState.activeArchiveSnapshot;
     const cardName = core_text.normalizeText(snapshot?.characterName || core_context.getContext()?.name2, 100);
-    let context = null, memory = snapshot?.memory || null;
-    if (!snapshot) { try { context = core_context.getContext(); memory = repository.getImportedMemory(context); } catch { /* 无 live 档案时用卡名。 */ } }
+    let memory = snapshot?.memory || null;
+    if (!snapshot) { try { memory = repository.getImportedMemory(core_context.getContext()); } catch { /* 无 live 档案时用卡名。 */ } }
+    let roster = null;
+    try { roster = people.normalizeParticipantRoster(memory?.[people.PARTICIPANTS_KEY]); } catch { roster = null; }
+    const cast = roster ? roster.people.filter(person => person.identity !== 'user') : [];
+    if (cast.length < 2) return cardName || '他';
+    const key = value => people.plainPersonName(String(value || '')).replace(/\s+/g, '').toLowerCase();
+    const spoken = key(item?.speaker);
+    if (spoken) {
+        const hit = cast.filter(person => key(person.name) === spoken || people.normalizeAliases(Array.isArray(person.aliases) ? person.aliases : [], person.name).some(alias => key(alias) === spoken));
+        if (hit.length === 1) return people.plainPersonName(hit[0].name);
+    }
     try {
-        const fallback = route_people.storyCastFallback('travel', context, memory, '', { historical: !!snapshot });
-        const label = route_people.storyCastLabel(memory, { sourceMemoryIds: item?.sourceMemoryIds,
-            text: [item?.name, item?.summary, ...lines].filter(value => typeof value === 'string').join('\n'), fallback });
-        if (label) return core_text.normalizeText(label, 100);
-    } catch { /* 单人卡或无名单时用卡名。 */ }
-    return cardName || '他';
+        const ids = Array.isArray(item?.sourceMemoryIds) ? item.sourceMemoryIds : [];
+        const memories = (Array.isArray(memory?.memories) ? memory.memories : []).filter(row => ids.includes(row?.id));
+        const found = memories.length ? route_people.archiveCastIds(roster, { memories }) : [];
+        if (found.length === 1) return people.plainPersonName(cast.find(person => person.id === found[0])?.name || '') || '他';
+    } catch { /* 认不出时不猜。 */ }
+    return '他';
 }
 
 function travelDialogueHtml(item, session) {
