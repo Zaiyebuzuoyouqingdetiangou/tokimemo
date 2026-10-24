@@ -40,9 +40,10 @@ export function renderButterfly() {
     const branchNodes = branches.map((node, index) => `<button type="button" class="rmt-node rmt-branch-node ${index + 1 === session.selected ? 'active' : ''}" data-rmt-node="${index + 1}"><span>${String(index + 1).padStart(2, '0')}</span>${core_text.esc(node.label)}</button>`).join('');
     const endingIndex = session.nodes.length - 1;
     const isOmega = !!selected.trueEnding;
-    const castContext = (() => { try { return core_context.getContext(); } catch { return null; } })();
-    const castMemory = runtimeState.activeArchiveSnapshot || (() => { try { return archive_repository.getImportedMemory(castContext); } catch { return null; } })();
-    const observerName = core_text.esc(core_participants.compactCastLabel(pageCast(session, castMemory, castContext)) || runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2 || '{{char}}');
+    const castContext = runtimeState.activeArchiveSnapshot ? null : (() => { try { return core_context.getContext(); } catch { return null; } })();
+    const castMemory = runtimeState.activeArchiveSnapshot ? runtimeState.activeArchiveSnapshot.memory
+        : (() => { try { return archive_repository.getImportedMemory(castContext); } catch { return null; } })();
+    const observerName = core_text.esc(core_participants.compactCastLabel(pageCast(session, castMemory, castContext)) || runtimeState.activeArchiveSnapshot?.characterName || castContext?.name2 || '{{char}}');
     const speakerName = core_text.esc(nodeSubjectName(selected, session, castMemory, castContext) || observerName);
     const observationPanel = isOmega
         ? `<section class="rmt-terminal-block rmt-observation-screen rmt-omega-screen">

@@ -35,10 +35,13 @@ export function inboxSenderLabel(letter, session) {
     const names = Array.isArray(letter?.participantNames) ? letter.participantNames.filter(Boolean)
         : Array.isArray(session?.participantNames) ? session.participantNames.filter(Boolean) : [];
     // 多人卡：这封信写的是谁就署谁，不把整份名单列出来。
-    const memory = (() => { try { return repository.getImportedMemory(contextApi.getContext()); } catch { return null; } })();
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    let context = null, memory = snapshot?.memory || null;
+    if (!snapshot) { try { context = contextApi.getContext(); memory = repository.getImportedMemory(context); } catch { /* 无 live 档案时仍可读原署名。 */ } }
+    const fallback = route_people.storyCastFallback('inbox', context, memory, names.length ? names.join('、') : session?.sender, { historical: !!snapshot });
     return route_people.storyCastLabel(memory, { sourceMemoryIds: letter?.sourceMemoryIds,
         text: [letter?.title, letter?.greeting, letter?.body, letter?.closing].filter(value => typeof value === 'string').join('\n'),
-        fallback: names }) || session?.sender || '来信';
+        fallback }) || '来信';
 }
 function resetView(session) {
     const scope = sessionScope(session);

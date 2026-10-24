@@ -30,3 +30,53 @@ test('model scan is batched, and only names tied to real entries are kept', () =
     const merged = scan.mergeCastScan([rows, [{ name: '甲长老', aliases: ['老甲'], entryUids: ['9'], note: '' }]]);
     assert.deepEqual(merged.find(r => r.name === '甲长老').entryUids, ['8', '9']);
 });
+
+test('whole-book scan includes the tail of long entries with stable source identity and ordered slices', () => {
+    const content = '背景。'.repeat(18000) + '\n姓名：某甲；这是条目最后的人物。';
+    const batches = scan.castScanBatches([{ world: 'A书', uid: '42', title: '全部人物', content }]);
+    const slices = batches.flat();
+    assert.ok(batches.length > 1, 'the full source, not a truncated prefix, determines the request count');
+    assert.ok(batches.some(batch => scan.castScanPrompt(batch).includes('某甲')));
+    const recovered = [];
+    for (const row of slices) {
+        assert.equal(row.uid, '42');
+        assert.equal(row.world, 'A书');
+        assert.equal(row.title, '全部人物');
+        assert.equal(row.content, content.slice(row.offset, row.offset + row.content.length));
+        for (let index = 0; index < row.content.length; index++) recovered[row.offset + index] = row.content[index];
+    }
+    assert.equal(recovered.join(''), content, 'every source character is retained, including the final slice');
+    assert.ok(slices.every((row, i) => i === 0 || row.offset > slices[i - 1].offset));
+    assert.ok(batches.every(batch => batch.reduce((n, row) => n + row.content.length, 0) <= 40000));
+});
+
+test('model names retain middle dots and full foreign names rather than collapsing a family name', () => {
+    const names = ['阿尔托莉雅·潘德拉贡', '阿尔托莉雅·卡斯特', 'Alexandra Catherine Montgomery'];
+    const result = scan.normalizeCastScan({ people: names.map(name => ({ name, entryUids: ['1'], aliases: [] })) }, [{ uid: '1' }]);
+    assert.deepEqual(result.map(row => row.name), names);
+});
+
+test('unambiguous true names and aliases merge across model batches without losing either source', () => {
+    const rows = scan.mergeCastScan([
+        [{ name: '某乙', aliases: ['夜行客'], entryUids: ['1'], note: '剑客' }],
+        [{ name: '夜行客', aliases: ['某乙', '白衣客'], entryUids: ['2'], note: '' }],
+        [{ name: '白衣客', aliases: [], entryUids: ['3'], note: '' }],
+    ]);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].name, '某乙');
+    assert.deepEqual(new Set(rows[0].aliases), new Set(['夜行客', '白衣客']));
+    assert.deepEqual(rows[0].entryUids, ['1', '2', '3']);
+});
+
+test('a shared alias does not silently join different named people or select an arbitrary owner', () => {
+    const rows = [
+        { name: '某乙', aliases: ['夜行客'], entryUids: ['1'], note: '' },
+        { name: '某甲', aliases: ['夜行客'], entryUids: ['2'], note: '' },
+        { name: '夜行客', aliases: [], entryUids: ['3'], note: '' },
+    ];
+    for (const input of [rows, [...rows].reverse()]) {
+        const merged = scan.mergeCastScan([input]);
+        assert.equal(merged.length, 3);
+        assert.equal(scan.castIdentityMatches(rows[2], rows.slice(0, 2)).length, 2);
+    }
+});

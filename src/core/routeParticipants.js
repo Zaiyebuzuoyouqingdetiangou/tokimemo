@@ -88,7 +88,7 @@ export function writeRoutePeople(route, value, context, memory, storage) {
     } catch { return false; /* Still usable for this session. */ }
 }
 // 「按档案剧情」：只取档案记忆里真的出场过的人物。建档时勾了、但剧情里还没登场的人不算。
-// 先看每条记忆写明的参与者，再在标题、摘要和锚点里找名字或世界书关键词。
+// 每条记忆先用明确参与者；旧记忆没有可识别的参与者时，才从实际行动句补判。
 // 世界书关键词只在「这个条目只属于这一个人、条目标题里写着他的名字」时才拿来认人。
 // 一个条目里写了一整个门派或好几个 NPC 时，它的关键词（地名、门派名）是大家共用的，
 // 拿来认人会把整个条目的人都算成出场。名字本身照常认。
@@ -123,31 +123,82 @@ function castTerms(person, roster) {
     for (const alias of person.aliases || []) add(alias);
     return [...terms];
 }
-function memoryCastText(item) {
-    const parts = [];
-    for (const field of ['title', 'summary']) if (typeof item?.[field] === 'string') parts.push(item[field]);
-    for (const field of ['anchors', 'participants']) if (Array.isArray(item?.[field])) parts.push(...item[field].filter(value => typeof value === 'string'));
-    return parts.join('\n').replace(/\s+/g, '').toLowerCase();
+function castCatalog(roster) {
+    const rows = roster.people.filter(person => person.identity !== 'user').map(person => ({
+        id: person.id, name: participants.plainPersonName(person.name).replace(/\s+/g, '').toLowerCase(),
+        terms: castTerms(person, roster),
+    }));
+    // 同一外号或名字片段指向多人时，不猜是哪一个，更不能一次选中全部。
+    const owners = new Map();
+    for (const row of rows) for (const term of row.terms) owners.set(term, (owners.get(term) || 0) + 1);
+    return rows.map(row => ({ ...row, terms: row.terms.filter(term => owners.get(term) === 1) }));
+}
+function namedCastIds(item, catalog) {
+    const ids = new Set();
+    for (const raw of Array.isArray(item?.participants) ? item.participants : []) {
+        if (typeof raw !== 'string') continue;
+        const name = participants.plainPersonName(raw).replace(/\s+/g, '').toLowerCase();
+        if (!name) continue;
+        let matches = catalog.filter(row => row.name === name);
+        if (!matches.length) matches = catalog.filter(row => row.terms.includes(name));
+        if (!matches.length && Array.from(name).length >= 2) matches = catalog.filter(row => row.name.includes(name));
+        if (matches.length === 1) ids.add(matches[0].id);
+    }
+    return ids;
+}
+
+// 只用于缺少参与者的旧档补判，不改原记忆，也不请求模型。标题/锚点中的孤立人名不是出场证据。
+const NON_EVENT_FRAME = /如果|假如|假设|倘若|万一|梦见|梦到|幻想|设想|想象|担心|害怕|据说|听说|听闻|传闻/u;
+const PLANNED_TARGET = /计划|打算|准备|想要|希望|期待|盼望|将要|(?:明天|明日|下周|下月|下个月|来日|改天|日后)(?!的)/u;
+const MENTIONED_TARGET = /(?:提起|提到|谈到|说起|听说|听闻|想起|想念|打听|关于|有关)(?:了|过)?[“”"'「」]*$/u;
+const ABSENT_TARGET = /(?:未曾|尚未|还未|没能|没有|不会|不能|无法)[^，,：:]*(?:见到|看见|遇到|等来|找到)(?:了|过)?$/u;
+const NOT_PRESENT = /^(?:(?:还|仍|尚|一直|依然|暂时)?(?:未|没|没有|不曾|从未|不会|并未|尚未)(?:曾|能)?(?:出场|登场|到场|露面|出现|来|抵达|在场)|不在(?:场|这里)|可能|也许|或许|将要|计划|打算|准备|预计|明天|明日|下周|下月|未来|会(?!合|面))/u;
+const SETTING_PREDICATE = /^(?:的|之|是|作为|来自|属于|擅长|喜欢|喜爱|名叫|被称为|拥有|年龄|性格|身份|外貌|惯用|绰号)/u;
+function appearsInSentences(sentences, term, allTerms) {
+    for (const sentence of sentences) {
+        let from = 0, index;
+        while ((index = sentence.indexOf(term, from)) !== -1) {
+            from = index + term.length;
+            // 假设/未来可在逗号前；只有明确转折/转场才结束该作用域。
+            const scope = sentence.slice(0, index).split(/但是|然而|后来|随后|实际上|事实上|但/u).at(-1)
+                .replace(/(?:计划|安排|假设|想法)(?:之后|以后|后)/gu, '');
+            const before = scope.split(/[，,：:]/u).at(-1);
+            let after = sentence.slice(from).split(/[，,。！？!?；;]/u)[0];
+            if (NON_EVENT_FRAME.test(scope) || PLANNED_TARGET.test(scope) || MENTIONED_TARGET.test(before)
+                || ABSENT_TARGET.test(before) || NOT_PRESENT.test(after) || /(?:吗|么|来不来|会不会)[”」"']*$/u.test(after)) continue;
+            // 「甲和乙一起走来」中的甲也是真实参与者；只跨过名单里可确认的人名。
+            while (/^[、和与及跟]/u.test(after)) {
+                const rest = after.slice(1), next = allTerms.find(name => rest.startsWith(name));
+                if (!next) break;
+                after = rest.slice(next.length);
+            }
+            const subject = !before || /[、和与及跟]$/u.test(before)
+                || /^(?:[“「"']|这时|此时|当时|突然|忽然|与此同时|而|只见|只听|一旁的|身旁的)*$/u.test(before);
+            // 不限定动作动词：击退、修好、沉默等既有剧情同样有效。人设介绍不当作现场行为。
+            if (subject && /^[\p{L}]/u.test(after) && !SETTING_PREDICATE.test(after) && !NOT_PRESENT.test(after)) return true;
+            if (/(?:见到|看见|遇到|碰到|接住|抱住|拉住|扶住|迎来|送走|告别)(?:了|过)?$/u.test(before)) return true;
+        }
+    }
+    return false;
 }
 export function archiveCastIds(roster, memory) {
     const normalized = participants.normalizeParticipantRoster(roster);
     if (!normalized) return [];
     const items = Array.isArray(memory?.memories) ? memory.memories : [];
-    const named = new Set(), texts = [];
+    const catalog = castCatalog(normalized), found = new Set();
+    const allTerms = [...new Set(catalog.flatMap(row => row.terms))].sort((a, b) => b.length - a.length);
     for (const item of items) {
-        for (const name of Array.isArray(item?.participants) ? item.participants : []) {
-            if (typeof name === 'string' && name.trim()) named.add(name.replace(/\s+/g, '').toLowerCase());
-        }
-        texts.push(memoryCastText(item));
+        const named = namedCastIds(item, catalog);
+        for (const id of named) found.add(id);
+        const prose = [item?.summary, item?.title, ...(Array.isArray(item?.anchors) ? item.anchors : [])]
+            .filter(value => typeof value === 'string');
+        // 多人长档案在主线程读：同条记忆只规范化一次，无关人物先用短路查找跳过。
+        const sentences = prose.flatMap(value => value.split(/[。！？!?；;\n]/u)).map(value => value.replace(/\s+/g, '').toLowerCase());
+        const searchable = sentences.join('\n');
+        // 旧抽取的参与者可能不完整；只补有实际叙述的人，不因出现一名参与者就截掉其余人。
+        for (const row of catalog) if (!named.has(row.id) && row.terms.some(term => searchable.includes(term) && appearsInSentences(sentences, term, allTerms))) found.add(row.id);
     }
-    const text = texts.join('\n');
-    return normalized.people.filter(person => person.identity !== 'user').filter(person => {
-        const terms = castTerms(person, normalized);
-        const fullName = participants.plainPersonName(person.name).replace(/\s+/g, '').toLowerCase();
-        // 记忆里只写了名字的一部分（比如只写名不写姓）也算。
-        return terms.some(term => named.has(term) || text.includes(term))
-            || [...named].some(name => Array.from(name).length >= 2 && fullName.includes(name));
-    }).map(person => person.id);
+    return catalog.filter(row => found.has(row.id)).map(row => row.id);
 }
 
 // 多人卡：一段内容只写这段剧情里的人。先看它引用的档案记忆里有谁，再看正文点到了谁，
@@ -162,7 +213,9 @@ export function storyCastLabel(memory, { sourceMemoryIds = [], text = '', fallba
     const memories = refs.size ? (Array.isArray(memory?.memories) ? memory.memories : []).filter(item => refs.has(item?.id)) : [];
     const fromMemories = memories.length ? archiveCastIds(roster, { memories }) : [];
     if (fromMemories.length) return label(fromMemories);
-    const fromText = text ? archiveCastIds(roster, { memories: [{ summary: String(text) }] }) : [];
+    // 虚构正文/歌词的显示姓名与真实档案选人不同：正文点名即可，不把它反写为已发生历史。
+    const prose = String(text || '').replace(/\s+/g, '').toLowerCase();
+    const fromText = prose ? castCatalog(roster).filter(row => row.terms.some(term => prose.includes(term))).map(row => row.id) : [];
     return fromText.length ? label(fromText) : fallbackLabel;
 }
 
@@ -177,6 +230,13 @@ export function routeCastNames(route, context, memory, storage) {
     const ids = choice.strategy === 'specified' ? choice.selectedIds
         : choice.strategy === 'archive' ? archiveCastIds(roster, memory) : [];
     return ids.map(id => roster.people.find(person => person.id === id)?.name).filter(Boolean);
+}
+
+// 历史阅读只使用历史内容自己的姓名，绝不借用当前聊天的本页人物设置。
+export function storyCastFallback(route, context, memory, fallback = '', { historical = false, storage } = {}) {
+    const names = !historical && context ? routeCastNames(route, context, memory, storage) : [];
+    const value = names.length ? names : fallback;
+    return participants.compactCastLabel(Array.isArray(value) ? value.join('、') : String(value || ''));
 }
 
 // Resolve once at the click/queue boundary. Persist the resulting snapshot with

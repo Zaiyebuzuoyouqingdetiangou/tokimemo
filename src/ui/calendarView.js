@@ -4,6 +4,7 @@ import * as core_text from '../core/text.js';
 import * as core_context from '../core/context.js';
 import * as archive_repository from '../archive/repository.js';
 import * as route_people from '../core/routeParticipants.js';
+import * as core_participants from '../core/participants.js';
 import { state as runtimeState } from '../core/state.js';
 import * as modes_calendar from '../modes/calendar.js';
 import * as ui_overlay from './overlay.js';
@@ -385,12 +386,16 @@ function holidayCardMarkup(card) {
     const calligraphy = core_text.esc(card?.calligraphy || '');
     const message = core_text.esc(card?.message || '');
     // 多人卡：落款只写这张卡讲到的人，不把整份名单列出来。
+    // 尚未压缩的名单用于推断；不把本来没有署名的贺卡自动加上名字。
     let signatureText = card?.signature || '';
     if (signatureText.includes('、')) {
-        let memory = null;
-        try { memory = archive_repository.getImportedMemory(core_context.getContext()); } catch { memory = null; }
-        signatureText = route_people.storyCastLabel(memory, { text: [card?.message, card?.calligraphy].filter(value => typeof value === 'string').join('\n'), fallback: signatureText });
-    }
+        const snapshot = runtimeState.activeArchiveSnapshot;
+        let context = null, memory = snapshot?.memory || null;
+        if (!snapshot) { try { context = core_context.getContext(); memory = archive_repository.getImportedMemory(context); } catch { /* 保留原落款。 */ } }
+        signatureText = route_people.storyCastLabel(memory, { sourceMemoryIds: card?.sourceMemoryIds,
+            text: [card?.message, card?.calligraphy].filter(value => typeof value === 'string').join('\n'),
+            fallback: route_people.storyCastFallback('calendar', context, memory, signatureText, { historical: !!snapshot }) });
+    } else signatureText = core_participants.compactCastLabel(signatureText);
     const signature = core_text.esc(signatureText);
     let content = '';
     if (expression === 'writing') {

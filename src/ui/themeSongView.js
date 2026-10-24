@@ -15,17 +15,28 @@ import * as recoveryView from './recoveryView.js';
 import * as overlay from './overlay.js';
 import * as text from '../core/text.js';
 import * as route_people from '../core/routeParticipants.js';
+import * as participants from '../core/participants.js';
 import { state as runtimeState } from '../core/state.js';
 
 // 多人卡：演唱者和标题里只写这首歌讲到的人，不把整份名单列出来。
 function songCast(song, value) {
     const label = String(value || '');
-    if (!label.includes('、')) return label;
-    const memory = (() => { try { return repository.getImportedMemory(contextApi.getContext()); } catch { return null; } })();
-    const cast = part => route_people.storyCastLabel(memory, { sourceMemoryIds: song?.sourceMemoryIds,
-        text: [song?.title, song?.sourceMemoryAnchor, song?.lyrics].filter(item => typeof item === 'string').join('\n'), fallback: part });
+    if (!label.includes('、')) return label.split(' / ').map(participants.plainPersonName).join(' / ');
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    let context = null, memory = snapshot?.memory || null;
+    if (!snapshot) { try { context = contextApi.getContext(); memory = repository.getImportedMemory(context); } catch { /* 保留原演唱者。 */ } }
+    const known = new Set((memory?.participantsV1?.people || []).filter(person => person.identity !== 'user')
+        .flatMap(person => [person.name, ...(person.aliases || [])]).map(participants.plainPersonName));
+    const cast = part => {
+        const names = part.split('、').map(participants.plainPersonName);
+        // 自定义歌手不是档案名单；对唱的 user / 旁观者等身份也不能被替换。
+        if (known.size && names.some(name => !known.has(name))) return names.join('、');
+        return route_people.storyCastLabel(memory, { sourceMemoryIds: song?.sourceMemoryIds,
+            text: [song?.title, song?.sourceMemoryAnchor, song?.lyrics].filter(item => typeof item === 'string').join('\n'),
+            fallback: route_people.storyCastFallback('themeSong', context, memory, part, { historical: !!snapshot }) });
+    };
     if (label.endsWith('的角色印象')) return cast(label.slice(0, -5)) + '的角色印象';
-    return label.split(' / ').map(part => part.includes('、') ? cast(part) : part).join(' / ');
+    return label.split(' / ').map(part => part.includes('、') ? cast(part) : participants.plainPersonName(part)).join(' / ');
 }
 const MODE = contract.THEME_SONG_MODE;
 const readonly = () => !!runtimeState.activeArchiveSnapshot && (runtimeState.activeArchiveReadOnly || runtimeState.activeArchiveSnapshot.backupOnly);
@@ -222,7 +233,7 @@ export function renderThemeSongs() {
         try { audio = song_player.songPlayerHtml(contextApi.getContext(), selected.id, { readOnly: readonly(), songTitle: selected.title }); } catch { audio = ''; }
     }
     const details = `<div class="rmt-song-detail"${selected ? ` data-rmt-current-song="${esc(selected.id)}"` : ''}>${selected ? switcher : ''}${cover}${audio}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
-    const list = session.songs.length ? `<details class="rmt-song-library"><summary><span>歌曲列表 · ${session.songs.length} 首</span><small>${esc(selected?.title || '')}</small></summary><nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav></details>` : '';
+    const list = session.songs.length ? `<details class="rmt-song-library"><summary><span>歌曲列表 · ${session.songs.length} 首</span><small>${esc(selected?.title || '')}</small></summary><nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(songCast(song, song.singer))}</small></span></button>`).join('')}</nav></details>` : '';
     const allCache = runtimeState.activeArchiveSnapshot?.cache || cache.getCache(contextApi.getContext());
     const recovery = recoveryView.recoveryBannerHtml(allCache, memory, { readOnly: readonly() });
     const partial = selected?.generationIncomplete ? '<p class="rmt-recovery-status" role="status">这首歌尚未写完；已收到的歌名、曲风和歌词分别保留，空白部分仍待生成。</p>' : '';

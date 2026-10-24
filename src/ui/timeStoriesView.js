@@ -20,9 +20,14 @@ const button = (action, label, id = '', extra = '') => `<button type="button" cl
 const episodeText = episode => [episode?.title, episode?.opening, episode?.message, episode?.closing,
     ...(Array.isArray(episode?.lines) ? episode.lines.map(line => line?.text) : [])].filter(value => typeof value === 'string').join('\n');
 // 多人卡：这一篇写的是谁就显示谁。
-const nameFor = (session, role, episode = null) => role === 'char'
-    ? route_people.storyCastLabel((() => { try { return repository.getImportedMemory(contextApi.getContext()); } catch { return null; } })(), { sourceMemoryIds: episode?.sourceMemoryIds, text: episodeText(episode), fallback: session.characterName })
-    : session.userName;
+function nameFor(session, role, episode = null) {
+    if (role !== 'char') return session.userName;
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    let context = null, memory = snapshot?.memory || null;
+    if (!snapshot) { try { context = contextApi.getContext(); memory = repository.getImportedMemory(context); } catch { /* 保留原署名。 */ } }
+    return route_people.storyCastLabel(memory, { sourceMemoryIds: episode?.sourceMemoryIds, text: episodeText(episode),
+        fallback: route_people.storyCastFallback(session.kind, context, memory, session.characterName, { historical: !!snapshot }) });
+}
 const presentation = value => ['modern', 'classical', 'fantasy', 'scifi', 'neutral'].includes(value) ? value : 'neutral';
 const palette = value => ['rose', 'blue', 'moss', 'gold', 'plum', 'slate'].includes(value) ? value : 'slate';
 const mediumIcon = value => ({ phone: 'fa-phone', terminal: 'fa-satellite-dish', relic: 'fa-gem', object: 'fa-hourglass-half', voice: 'fa-wave-square' })[value] || 'fa-wave-square';
