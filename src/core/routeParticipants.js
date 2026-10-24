@@ -89,7 +89,26 @@ export function writeRoutePeople(route, value, context, memory, storage) {
 }
 // 「按档案剧情」：只取档案记忆里真的出场过的人物。建档时勾了、但剧情里还没登场的人不算。
 // 先看每条记忆写明的参与者，再在标题、摘要和锚点里找名字或世界书关键词。
-function castTerms(person) {
+// 世界书关键词只在「这个条目只属于这一个人、条目标题里写着他的名字」时才拿来认人。
+// 一个条目里写了一整个门派或好几个 NPC 时，它的关键词（地名、门派名）是大家共用的，
+// 拿来认人会把整个条目的人都算成出场。名字本身照常认。
+function trustedKeywords(person, roster) {
+    const plain = participants.plainPersonName(person.name).replace(/\s+/g, '');
+    if (!plain) return [];
+    const owners = new Map();
+    for (const other of roster?.people || []) for (const ref of other.sourceRefs || []) {
+        const id = `${ref.world}\u0000${ref.uid}`;
+        owners.set(id, (owners.get(id) || 0) + 1);
+    }
+    const keywords = [];
+    for (const ref of person.sourceRefs || []) {
+        if ((owners.get(`${ref.world}\u0000${ref.uid}`) || 0) !== 1) continue;
+        if (!String(ref.title || '').replace(/\s+/g, '').includes(plain)) continue;
+        keywords.push(...(ref.keys || []));
+    }
+    return keywords;
+}
+function castTerms(person, roster) {
     const terms = new Set();
     const add = value => {
         const term = String(value || '').replace(/\s+/g, '').toLowerCase();
@@ -99,7 +118,7 @@ function castTerms(person) {
     add(person.name);
     add(participants.plainPersonName(person.name));
     for (const part of participants.plainPersonName(person.name).split(/[·・•\s/()（）「」【】]+/)) add(part);
-    for (const ref of person.sourceRefs || []) for (const keyword of ref.keys || []) add(keyword);
+    for (const keyword of trustedKeywords(person, roster)) add(keyword);
     return [...terms];
 }
 function memoryCastText(item) {
@@ -121,7 +140,7 @@ export function archiveCastIds(roster, memory) {
     }
     const text = texts.join('\n');
     return normalized.people.filter(person => person.identity !== 'user').filter(person => {
-        const terms = castTerms(person);
+        const terms = castTerms(person, normalized);
         const fullName = participants.plainPersonName(person.name).replace(/\s+/g, '').toLowerCase();
         // 记忆里只写了名字的一部分（比如只写名不写姓）也算。
         return terms.some(term => named.has(term) || text.includes(term))
