@@ -49,6 +49,10 @@ ${root} .rmt-participant-card-types span{font-size:calc(14px*var(--rmt-font-scal
 ${root} .rmt-participant-entries:empty{display:none}
 ${root} :is(.rmt-participant-entry,.rmt-participant-person){display:flex;flex-direction:column;gap:8px;min-width:0;padding:14px 0;border-bottom:1px solid var(--rmt-theme-border,#cbdce6)}
 ${root} .rmt-participant-entry details p{white-space:pre-wrap;overflow-wrap:anywhere}
+${root} .rmt-participant-scan{padding:12px 0;border-bottom:1px solid var(--rmt-theme-border,#cbdce6)}
+${root} [data-rmt-participant-found] .rmt-participant-select{align-items:flex-start;padding:6px 0}
+${root} [data-rmt-participant-found] .rmt-participant-select b{flex:0 0 auto}
+${root} [data-rmt-participant-found] .rmt-participant-select small{flex:1 1 auto;min-width:0;color:var(--rmt-theme-muted,#64748b);overflow-wrap:anywhere;font-size:calc(12px*var(--rmt-font-scale,1))}
 ${root} .rmt-participant-dialog small{font-size:calc(13px*var(--rmt-font-scale,1));color:var(--rmt-theme-muted,#59677a);overflow-wrap:anywhere}
 ${root} .rmt-participant-dialog :is(button,input,select,summary):focus-visible{outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:3px}
 ${root} .rmt-participant-dialog [role=alert]{font-weight:600}
