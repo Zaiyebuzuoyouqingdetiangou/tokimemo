@@ -321,6 +321,7 @@
   "ui/overlayClickTargets.js",
   "ui/overlayPartial.js",
   "ui/overlay.js",
+  "core/castScan.js",
   "ui/participantPicker.js",
   "ui/pastLivesCard.css.js",
   "ui/pastLivesCard.js",
