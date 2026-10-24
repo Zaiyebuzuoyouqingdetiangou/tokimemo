@@ -1,4 +1,4 @@
-心迹回廊 1.0.61 / build 1.0.61-r9
+心迹回廊 1.0.61 / build 1.0.61-r10
 基线：最终交付 1.0.60-r1 ZIP 原样解压；本轮独立候选。
 基线 ZIP SHA-256：153f29a56b0f32b114fae4f7ebb657fee280c746830d99ac0fb5ca78bce2675e
 
@@ -20,8 +20,8 @@ python3 tools/verification/run-tests.py：152/152 通过，退出0。
 两次独立输出重建字节一致；--check 与交付运行bundle一致；manifest/index/version/build查询串一致。
 差异复核及红绿证据见 verification/1.0.61/。历史工具缺失不冒称已恢复或执行；本轮使用随1.0.60交付的 tools/verification/。
 
-运行bundle SHA-256：39a6247128a1c0d5d3362ec308fbaded0077f2ec58cd2ab1eb1cbcc704e31738
-源模块集合 SHA-256：b4072ab52025671fa6a1a27ad76c517de3bdeb351b7b4e67b92473094655e72d
+运行bundle SHA-256：46b60aa22280d5a87e8ca918c180ce73ed1d35d5b28e25257ff0a3625b823d41
+源模块集合 SHA-256：3f76407f0850ef92dfeaefb41d0ac3b22847126698836cfdc9ea87bda5bf61d4
 
 r2 追加
 7. 本页人物新增「按档案剧情出场」：从档案记忆的参与者、标题、摘要和锚点里找名单人物的名字或世界书关键词（一个字的词不用），只取出场过的人；找不到时报错让用户换方式，不扩成全名单。选择方式下显示每种方式的说明，选这一项时列出当前找到的人物。档案名单本身不改。
@@ -54,6 +54,10 @@ r8 追加
 
 r9 追加
 14. 蝴蝶效应显示回退改为本页当前选择（routeCastNames：指定人物/按档案剧情出场），其后才是 session.subject；Ω 直接用它。只读设置，不抽随机。
+   回归：tests/healthcheck-route-people.mjs 新增 1 项。
+
+r10 追加
+15. 出场判断的世界书关键词只取「仅关联这一人、条目标题含其名」的条目；多人共用条目（门派/势力）的关键词不再用于认人。
    回归：tests/healthcheck-route-people.mjs 新增 1 项。
 
 实际限制
